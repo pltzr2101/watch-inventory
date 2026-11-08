@@ -1,0 +1,57 @@
+# Watch-Inventory – Portainer-Stack (nur Registry-Image, kein build:)
+# ---------------------------------------------------------------------------
+# Direkt in Portainers Stack-Editor einfügbar (Web-Editor → "Web editor" /
+# "Environment variables"). Variablen (IMAGE, TAG, HOST_PORT, SESSION_SECRET,
+# ADMIN_PASSWORD_HASH, ...) dort als .env-Stile Zeilen "KEY=VALUE" eintragen
+# oder per "Load variables from file" eine .env-Datei hochladen (siehe
+# docs/INSTALL.md). Keine Zugangsdaten oder Secrets in diese Datei schreiben.
+#
+# Standard-Host-Port: 3080 (3000 ist auf dem Ziel-LXC belegt).
+# Database, Bilder und Konfiguration liegen im benannten Volume "watchdata".
+
+services:
+  watch-inventory:
+    image: ${IMAGE:-ghcr.io/example/watch-inventory}:${TAG:-0.1.0}
+    container_name: watch-inventory
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-3080}:8080"
+    environment:
+      # Pflicht-Secrets: ohne sie startet die App mit klarer Fehlermeldung nicht.
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET fehlt – in den Stack-Env-Variablen setzen (mind. 32 Zeichen, z.B. 'openssl rand -hex 32')}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH fehlt – erzeugen mit 'python -m app.security <passwort>'}
+      DATA_DIR: /data
+      # Hinter Reverse Proxy/HTTPS auf true setzen:
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-15}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-8}
+      LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-300}
+      # Wecatalog.cn-Integration: standardmäßig deaktiviert (siehe docs/WEBCATALOG.md):
+      WECATALOG_ENABLED: ${WECATALOG_ENABLED:-false}
+      WECATALOG_BASE_URL: ${WECATALOG_BASE_URL:-https://www.wecatalog.cn}
+      WECATALOG_API_URL: ${WECATALOG_API_URL:-}
+      WECATALOG_API_TOKEN: ${WECATALOG_API_TOKEN:-}
+      WECATALOG_TIMEOUT_SECONDS: ${WECATALOG_TIMEOUT_SECONDS:-10}
+      WECATALOG_MAX_FETCHES_PER_HOUR: ${WECATALOG_MAX_FETCHES_PER_HOUR:-6}
+      WECATALOG_ALLOW_IMAGE_EDIT: ${WECATALOG_ALLOW_IMAGE_EDIT:-false}
+    volumes:
+      # Persistente Daten (SQLite-Datenbank, Originale, Exporte, tmp):
+      - watchdata:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request as u; u.urlopen('http://127.0.0.1:8080/healthz', timeout=5).read()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      # Watchtower: Stack automatisch auf neue Tags aktualisieren:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  watchdata:
+    name: watch-inventory-data

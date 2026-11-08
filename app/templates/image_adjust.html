@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Bild bearbeiten – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Bild korrigieren</h1>
+  <a class="btn" href="/watches/{{ image.watch_id }}">Zurück zur Uhr</a>
+</div>
+
+{% if not editable %}
+<div class="flash flash-warning">
+  Dieses Foto stammt aus dem Katalog (Wecatalog.cn) und wird <strong>unverändert</strong>
+  behandelt – Bearbeitungen sind bis zur Klärung des Erlaubnisumfangs deaktiviert.
+</div>
+{% endif %}
+
+<div class="two-col">
+  <section class="card">
+    <h2>Vorschau</h2>
+    <img id="preview-img" class="adjust-preview"
+         src="/images/{{ image.id }}/file{% if editable %}?adjusted=1{% endif %}"
+         alt="Vorschau">
+    <p class="hint">Das gespeicherte Original wird nie verändert – korrigiert wird nur die Export-/Anzeigenversion.</p>
+  </section>
+
+  <section class="card">
+    <h2>Korrekturen</h2>
+    <form method="post" action="/images/{{ image.id }}/adjust" id="adjust-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <label for="brightness">Helligkeit: <output id="out-brightness">1.0</output></label>
+      <input type="range" id="brightness" name="brightness" min="0.3" max="1.7" step="0.05"
+             value="{{ adjustments.get('brightness', 1.0) }}" {% if not editable %}disabled{% endif %}>
+
+      <label for="contrast">Kontrast: <output id="out-contrast">1.0</output></label>
+      <input type="range" id="contrast" name="contrast" min="0.3" max="1.7" step="0.05"
+             value="{{ adjustments.get('contrast', 1.0) }}" {% if not editable %}disabled{% endif %}>
+
+      <label for="rotation">Drehung (90°-Schritte)</label>
+      <select id="rotation" name="rotation" {% if not editable %}disabled{% endif %}>
+        {% for deg in [0, 90, 180, 270] %}
+        <option value="{{ deg }}" {% if adjustments.get('rotation', 0) == deg %}selected{% endif %}>{{ deg }}°</option>
+        {% endfor %}
+      </select>
+
+      <fieldset class="crop-box">
+        <legend>Zuschnitt (in %, leer = keine)</legend>
+        <div class="crop-grid">
+          <input name="crop_left" inputmode="decimal" placeholder="links" value="{{ adjustments.crop[0] if adjustments.get('crop') else '' }}">
+          <input name="crop_top" inputmode="decimal" placeholder="oben" value="{{ adjustments.crop[1] if adjustments.get('crop') else '' }}">
+          <input name="crop_right" inputmode="decimal" placeholder="rechts" value="{{ adjustments.crop[2] if adjustments.get('crop') else '' }}">
+          <input name="crop_bottom" inputmode="decimal" placeholder="unten" value="{{ adjustments.crop[3] if adjustments.get('crop') else '' }}">
+        </div>
+      </fieldset>
+
+      {% if editable %}
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Korrekturen speichern</button>
+      </div>
+      {% endif %}
+    </form>
+
+    {% if editable %}
+    <form method="post" action="/images/{{ image.id }}/reset">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn" type="submit">Alle Korrekturen zurücksetzen</button>
+    </form>
+    {% endif %}
+
+    <h3>Datei</h3>
+    <p class="muted mono">{{ image.original_name }} · {{ image.width }}×{{ image.height }} · {{ image.byte_size }} Bytes · Herkunft: {{ "Katalog-Import" if image.source.value == "wecatalog" else "eigenes Foto" }}</p>
+    <a class="btn" href="/images/{{ image.id }}/file" target="_blank">Original in neuem Tab öffnen</a>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/adjust.js"></script>
+{% endblock %}

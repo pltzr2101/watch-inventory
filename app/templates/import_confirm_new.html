@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Import prüfen – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Importvorschau prüfen</h1>
+  <a class="btn" href="/imports">Übersicht</a>
+</div>
+
+<div class="card hint-card">
+  <strong>Noch nichts übernommen.</strong> Prüfe und bearbeite die Felder unten; erst mit
+  „Jetzt als neue Uhr anlegen" entsteht der Datensatz.
+  Preise aus der Quelle wurden automatisch entfernt und werden nie importiert.
+</div>
+
+{% if errors %}
+<div class="flash flash-error">
+  <ul>{% for field, msg in errors.items() %}<li>{{ field }}: {{ msg }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if preview.status != "pending" %}
+<div class="flash flash-info">Dieser Vorschlag wurde bereits {{ "bestätigt" if preview.status == "confirmed" else "verworfen" }}.</div>
+{% endif %}
+
+<dl class="dl card">
+  <dt>Quelle</dt><dd>{{ preview.source_url or "manuell eingefügt" }}</dd>
+  <dt>Eingegangen am</dt><dd>{{ fmt_dt(preview.created_at) }}</dd>
+  <dt>Übernommene Felder</dt><dd>{{ preview.payload.keys() | join(", ") }}</dd>
+</dl>
+
+<form method="post" action="/imports/{{ preview.id }}/confirm" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <fieldset>
+    <legend>Inhalt (bearbeitbar)</legend>
+    <label for="title">Titel *</label>
+    <input id="title" name="title" required maxlength="200" value="{{ values.get('title') or '' }}">
+    {% if errors.get("title") %}<span class="field-error">{{ errors.title }}</span>{% endif %}
+
+    <label for="brand">Marke</label>
+    <input id="brand" name="brand" maxlength="120" value="{{ values.get('brand') or '' }}">
+
+    <label for="model">Modell</label>
+    <input id="model" name="model" maxlength="160" value="{{ values.get('model') or '' }}">
+
+    <label for="description">Beschreibung</label>
+    <textarea id="description" name="description" rows="6">{{ values.get('description') or '' }}</textarea>
+
+    <label for="specs_text">Technische Daten</label>
+    <textarea id="specs_text" name="specs_text" rows="4">{{ values.get('specs_text') or '' }}</textarea>
+    {% if errors.get("specs_text") %}<span class="field-error">{{ errors.specs_text }}</span>{% endif %}
+  </fieldset>
+
+  <fieldset>
+    <legend>Interne Angaben (nur hier, nie aus der Quelle)</legend>
+    <label for="sku">Artikelnummer (leer = automatisch)</label>
+    <input id="sku" name="sku" value="{{ values.get('sku') or '' }}">
+
+    <label for="status">Status *</label>
+    <select id="status" name="status">
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if values.get("status", "in_china") == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="purchase_price">Einkaufspreis (intern)</label>
+    <input id="purchase_price" name="purchase_price" inputmode="decimal" value="{{ values.get('purchase_price') or '' }}">
+
+    <label for="target_price">Geplanter Verkaufspreis (intern)</label>
+    <input id="target_price" name="target_price" inputmode="decimal" value="{{ values.get('target_price') or '' }}">
+
+    <label for="internal_notes">Interne Notizen</label>
+    <textarea id="internal_notes" name="internal_notes" rows="3">{{ values.get('internal_notes') or '' }}</textarea>
+    <p class="hint">Diese Felder bestätigst du selbst – aus der Quelle kommen sie nie.</p>
+  </fieldset>
+
+  {% if preview.pending_images %}
+  <fieldset>
+    <legend>Mitgelieferte Bilder ({{ preview.pending_images | length }})</legend>
+    <div class="img-grid">
+      {% for entry in preview.pending_images %}
+      <figure class="img-card">
+        <a href="/imports/{{ preview.id }}/images/{{ loop.index0 }}" target="_blank">
+          <img src="/imports/{{ preview.id }}/images/{{ loop.index0 }}"
+               alt="Katalogbild {{ loop.index }} (Vorschau)" loading="lazy">
+        </a>
+        <figcaption class="muted">#{{ loop.index }} · {{ entry.width }}×{{ entry.height }} · {{ entry.original }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    <p class="hint">Erst nach Bestätigung werden die Bilder der Uhr zugeordnet (Herkunft: Katalog, unverändert).</p>
+  </fieldset>
+  {% endif %}
+
+  <div class="form-actions">
+    {% if preview.status == "pending" %}
+    <button class="btn btn-primary" type="submit"
+            onclick="return confirm('Vorschau prüfen und als neue Uhr anlegen?');">
+      Jetzt als neue Uhr anlegen
+    </button>
+    </form>
+    <form method="post" action="/imports/{{ preview.id }}/reject" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit">Verwerfen</button>
+    </form>
+    {% else %}
+    </form>
+    {% endif %}
+  </div>
+{% endblock %}

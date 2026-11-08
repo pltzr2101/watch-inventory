@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Übersicht – Watch-Inventory{% endblock %}
+{% block content %}
+<h1>Übersicht</h1>
+<div class="stat-grid">
+  {% for status in statuses %}
+  <a class="stat" href="/watches?status={{ status.value }}">
+    <span class="stat-num">{{ counts.get(status, 0) }}</span>
+    <span class="stat-label">{{ status.label }}</span>
+  </a>
+  {% endfor %}
+</div>
+<p class="muted">
+  Aktive Uhren: <strong>{{ active_total }}</strong> · Archiviert: <strong>{{ archived_total }}</strong>
+  {% if wecatalog_enabled and pending_imports %}
+  · Offene Importvorschläge: <strong><a href="/imports">{{ pending_imports }}</a></strong>
+  {% endif %}
+</p>
+
+<h2>Letzte Statusänderungen</h2>
+{% if recent %}
+<table class="table">
+  <thead><tr><th>Wann</th><th>Uhr</th><th>Änderung</th></tr></thead>
+  <tbody>
+  {% for event in recent %}
+  <tr>
+    <td class="nowrap">{{ fmt_dt(event.changed_at) }}</td>
+    <td><a href="/watches/{{ event.watch_id }}">{{ event.watch.sku }} – {{ event.watch.title }}</a></td>
+    <td>{{ event.from_status.label if event.from_status else "—" }} → {{ event.to_status.label }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Noch keine Statusänderungen.</p>
+{% endif %}
+{% endblock %}

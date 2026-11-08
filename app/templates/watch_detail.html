@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}{{ watch.title }} – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ watch.title }}
+      <span class="badge badge-{{ watch.status.value }}">{{ watch.status.label }}</span>
+      {% if watch.archived_at %}<span class="tag">archiviert</span>{% endif %}
+    </h1>
+    <p class="muted mono">{{ watch.sku }}
+      {% if watch.brand %} · {{ watch.brand }}{% endif %}
+      {% if watch.model %} {{ watch.model }}{% endif %}
+      · angelegt {{ fmt_dt(watch.created_at) }} · geändert {{ fmt_dt(watch.updated_at) }}
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="/watches/{{ watch.id }}/edit">Bearbeiten</a>
+    <a class="btn btn-primary" href="/watches/{{ watch.id }}/listing">Anzeige erstellen</a>
+  </div>
+</div>
+
+{% if watch.provenance.value == "wecatalog" %}
+<div class="card card-source">
+  <strong>Quelle: {{ watch.source_name or "Wecatalog.cn" }}</strong>
+  {% if watch.source_url %} · <a href="{{ watch.source_url }}" rel="noreferrer noopener" target="_blank">ursprüngliche Katalog-URL</a>{% endif %}
+  · importiert am {{ fmt_dt(watch.imported_at) }}
+  · bestätigt am {{ fmt_dt(watch.import_confirmed_at) }}
+  <div class="mt">
+    {% if watch.import_approved_for_listing %}
+      <span class="tag tag-ok">Freigegeben für Anzeigen</span>
+      <form method="post" action="/watches/{{ watch.id }}/import-approve" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="approve" value="0">
+        <button class="btn btn-sm" type="submit">Freigabe zurücknehmen</button>
+      </form>
+    {% else %}
+      <span class="tag tag-warn">Nicht freigegeben – noch nicht für Anzeigen nutzbar</span>
+      <form method="post" action="/watches/{{ watch.id }}/import-approve" class="inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="approve" value="1">
+        <button class="btn btn-sm btn-primary" type="submit">Geprüft: für Anzeigen freigeben</button>
+      </form>
+    {% endif %}
+    {% if wecatalog_enabled %}
+      <a class="btn btn-sm" href="/imports/new?watch_id={{ watch.id }}">Quelle aktualisieren (Importvorschlag)</a>
+    {% endif %}
+  </div>
+  <p class="hint">Importierte Inhalte: {{ watch.source_fields | join(", ") if watch.source_fields else "—" }}. Einkaufs-/Verkaufspreise und Notizen werden aus Quelldaten nie übernommen.</p>
+</div>
+{% endif %}
+
+<div class="two-col">
+  <section class="card">
+    <h2>Vertrauliche Einkaufsdaten</h2>
+    <dl class="dl">
+      <dt>Einkaufspreis</dt><dd>{{ format_money(watch.purchase_price_cents) }}</dd>
+      <dt>Zusatzkosten</dt><dd>{{ format_money(watch.extra_costs_cents) }}{% if watch.extra_costs_note %} <span class="muted">({{ watch.extra_costs_note }})</span>{% endif %}</dd>
+      <dt>Geplanter VK</dt><dd>{{ format_money(watch.target_price_cents) }}</dd>
+      <dt>Tatsächlicher VK</dt><dd>{{ format_money(watch.sale_price_cents) }}</dd>
+      {% if watch.sold_at %}<dt>Verkauft am</dt><dd>{{ fmt_dt(watch.sold_at) }}</dd>{% endif %}
+      <dt>Interne Notizen</dt><dd class="pre">{{ watch.internal_notes or "—" }}</dd>
+    </dl>
+    <p class="hint">Nur intern sichtbar – wird nie in Anzeigen, ZIPs oder ungeschützte Routen übernommen.</p>
+  </section>
+
+  <section class="card">
+    <h2>Angaben für Anzeigen</h2>
+    <dl class="dl">
+      <dt>Zustand</dt><dd>{{ watch.condition or "—" }}</dd>
+      <dt>Zustand im Detail</dt><dd class="pre">{{ watch.condition_description or "—" }}</dd>
+      <dt>Lieferumfang</dt><dd class="pre">{{ watch.included_accessories or "—" }}</dd>
+      <dt>Versand</dt><dd class="pre">{{ watch.shipping_info or "—" }}</dd>
+      <dt>Status seit</dt><dd>{{ fmt_dt(watch.status_changed_at) }}</dd>
+    </dl>
+    <h3>Beschreibung</h3>
+    <p class="pre">{{ watch.description or "—" }}</p>
+    <h3>Technische Daten</h3>
+    {% if watch.specs %}
+    <ul class="spec-list">
+      {% for spec in watch.specs %}<li><strong>{{ spec.key }}:</strong> {{ spec.value }}</li>{% endfor %}
+    </ul>
+    {% else %}<p class="muted">Keine gepflegt.</p>{% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="page-head">
+    <h2> Fotos ({{ watch.images | length }})</h2>
+  </div>
+
+  <form method="post" action="/watches/{{ watch.id }}/images" enctype="multipart/form-data" class="upload-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="file" name="files" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+    <button class="btn btn-primary" type="submit">Hochladen</button>
+    <span class="hint">JPEG/PNG/WebP, mehrere möglich. Originaldateien bleiben unverändert.</span>
+  </form>
+
+  {% if watch.images %}
+  <div class="img-grid">
+    {% for image in watch.images %}
+    <figure class="img-card">
+      <a href="/images/{{ image.id }}/file" target="_blank">
+        <img src="/images/{{ image.id }}/file" alt="{{ image.original_name }}" loading="lazy">
+      </a>
+      <figcaption>
+        <span class="mono">#{{ loop.index }}
+          {% if image.label %}· {{ image.label }}{% endif %}
+          {% if image.source.value == "wecatalog" %}<span class="tag tag-warn">Katalog</span>{% endif %}
+          {% if image.adjustments %}<span class="tag">korrigiert</span>{% endif %}
+        </span>
+        <span class="muted">{{ image.width }}×{{ image.height }}</span>
+      </figcaption>
+      <div class="img-tools">
+        <form method="post" action="/images/{{ image.id }}/move" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="direction" value="up">
+          <button class="btn btn-xs" type="submit" {% if loop.first %}disabled{% endif %}>↑</button>
+        </form>
+        <form method="post" action="/images/{{ image.id }}/move" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="direction" value="down">
+          <button class="btn btn-xs" type="submit" {% if loop.last %}disabled{% endif %}>↓</button>
+        </form>
+        <a class="btn btn-xs" href="/images/{{ image.id }}/adjust">Bearbeiten</a>
+        <form method="post" action="/images/{{ image.id }}/delete" class="inline"
+              onsubmit="return confirm('Bild wirklich entfernen?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-xs btn-danger" type="submit">✕</button>
+        </form>
+      </div>
+      <form method="post" action="/images/{{ image.id }}/label" class="inline label-row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="label" maxlength="40" placeholder="Bezeichnung (z. B. front)" value="{{ image.label or '' }}">
+        <button class="btn btn-xs" type="submit">OK</button>
+      </form>
+    </figure>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Noch keine Fotos.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Status & Verlauf</h2>
+  <form method="post" action="/watches/{{ watch.id }}/status" class="filter-bar">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <select name="status">
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if watch.status.value == s.value %}selected{% endif %}>{{ s.label }}</option>
+      {% endfor %}
+    </select>
+    <input name="note" maxlength="300" placeholder="Notiz zum Wechsel (optional)">
+    <button class="btn btn-primary" type="submit">Status setzen</button>
+  </form>
+
+  {% if watch.status_events %}
+  <table class="table">
+    <thead><tr><th>Wann</th><th>Von</th><th>Nach</th><th>Notiz</th></tr></thead>
+    <tbody>
+    {% for event in watch.status_events | reverse %}
+      <tr>
+        <td class="nowrap">{{ fmt_dt(event.changed_at) }}</td>
+        <td>{{ event.from_status.label if event.from_status else "—" }}</td>
+        <td>{{ event.to_status.label }}</td>
+        <td>{{ event.note or "" }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="muted">Keine Einträge.</p>{% endif %}
+</section>
+
+<section class="card">
+  <h2>Gefahrenzone</h2>
+  <div class="actions">
+    <form method="post" action="/watches/{{ watch.id }}/archive" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if watch.archived_at %}
+      <input type="hidden" name="unarchive" value="1">
+      <button class="btn" type="submit">Archivierung aufheben</button>
+      {% else %}
+      <button class="btn" type="submit">Archivieren</button>
+      {% endif %}
+    </form>
+
+    <form method="post" action="/watches/{{ watch.id }}/public-approve" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="approve" value="{{ "0" if watch.public_approved else "1" }}">
+      <button class="btn" type="submit">
+        {% if watch.public_approved %}Öffentl. Freigabe zurücknehmen{% else %}Für spätere öffentl. Ansicht vormerken{% endif %}
+      </button>
+    </form>
+
+    <form method="post" action="/watches/{{ watch.id }}/delete" class="inline"
+          onsubmit="return confirm('Uhr {{ watch.sku }} mit allen Fotos unwiderruflich löschen?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-danger" type="submit">Endgültig löschen</button>
+    </form>
+  </div>
+  <p class="hint">Löschen entfernt Datensatz UND zugehörige Dateien konsistent. Archivieren behält alles und nimmt die Uhr aus der Standardliste.</p>
+</section>
+{% endblock %}

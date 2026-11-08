@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Bestand – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Bestand</h1>
+  <a class="btn btn-primary" href="/watches/new">+ Uhr anlegen</a>
+</div>
+
+<form method="get" action="/watches" class="filter-bar">
+  <input type="search" name="q" value="{{ q }}" placeholder="Suche: Titel, Marke, SKU, Notiz …">
+  <select name="status">
+    <option value="">Alle Status</option>
+    {% for s in statuses %}
+    <option value="{{ s.value }}" {% if status == s.value %}selected{% endif %}>{{ s.label }}</option>
+    {% endfor %}
+  </select>
+  <label class="checkbox">
+    <input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}> Archivierte anzeigen
+  </label>
+  <button type="submit" class="btn">Filtern</button>
+</form>
+
+{% if watches %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>SKU</th><th>Titel</th><th>Status</th><th>Einkauf</th><th>Ziel-/Verkauf</th><th>Herkunft</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for w in watches %}
+  <tr>
+    <td class="nowrap mono">{{ w.sku }}</td>
+    <td><a href="/watches/{{ w.id }}">{{ w.title }}</a>
+      {% if w.brand %}<span class="muted">· {{ w.brand }}{% if w.model %} {{ w.model }}{% endif %}</span>{% endif %}
+      {% if w.archived_at %}<span class="tag">archiviert</span>{% endif %}
+    </td>
+    <td><span class="badge badge-{{ w.status.value }}">{{ w.status.label }}</span></td>
+    <td class="nowrap">{{ format_money(w.purchase_price_cents) }}</td>
+    <td class="nowrap">{% if w.target_price_cents is not none %}{{ format_money(w.target_price_cents) }}{% elif w.sale_price_cents is not none %}{{ format_money(w.sale_price_cents) }}{% else %}—{% endif %}</td>
+    <td>{% if w.provenance.value == "wecatalog" %}<span class="tag tag-warn">Katalog-Import</span>{% else %}{{ "manuell" if w.provenance.value == "manual" else "eigene Inhalte" }}{% endif %}</td>
+    <td class="nowrap"><a class="btn btn-sm" href="/watches/{{ w.id }}">Öffnen</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Keine Treffer. <a href="/watches?archived=1">Archivierte durchsuchen</a></p>
+{% endif %}
+{% endblock %}

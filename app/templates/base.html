@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Watch-Inventory{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">Watch&#8209;Inventory</a>
+  {% if is_logged_in %}
+  <nav class="mainnav">
+    <a href="/">Übersicht</a>
+    <a href="/watches">Bestand</a>
+    <a href="/watches/new">+ Uhr</a>
+    {% if wecatalog_enabled %}<a href="/imports">Importe</a>{% endif %}
+  </nav>
+  <form method="post" action="/logout" class="logout-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn btn-ghost">Abmelden</button>
+  </form>
+  {% endif %}
+</header>
+<main class="container">
+  {% for f in flashes %}
+  <div class="flash flash-{{ f.level }}">{{ f.text }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

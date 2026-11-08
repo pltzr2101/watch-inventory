@@ -1,0 +1,34 @@
+{% if brand %}{{ brand }}{% if model %} {{ model }}{% endif %}{% else %}{{ title }}{% endif %}{% if condition %} · {{ condition }}{% endif %}
+
+**Details**
+
+{% if brand %}- **Marke:** {{ brand }}
+{% endif %}{% if model %}- **Modell:** {{ model }}
+{% endif %}{% if condition %}- **Zustand:** {{ condition }}
+{% endif %}{% if price %}- **Preis:** {{ price }}
+{% endif %}{% if shipping_info %}- **Versand:** {{ shipping_info }}
+{% endif %}
+
+{% if condition_description %}
+**Zustand im Detail**
+
+{{ condition_description }}
+{% endif %}
+{% if specs %}
+**Technische Daten**
+
+{% for spec in specs %}- {{ spec.key }}: {{ spec.value }}
+{% endfor %}
+{% endif %}
+{% if accessories %}
+**Lieferumfang**
+
+{{ accessories }}
+{% endif %}
+{% if description %}
+**Beschreibung**
+
+{{ description }}
+{% endif %}
+---
+Per DM erreichbar. Gerne Detailfotos. Keine Rückgabe – bitte Zustand vor dem Kauf prüfen.

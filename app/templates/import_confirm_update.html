@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Aktualisierung prüfen – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Quell-Aktualisierung prüfen</h1>
+  <a class="btn" href="/watches/{{ watch.id }}">Zurück zur Uhr</a>
+</div>
+
+<div class="card hint-card">
+  <strong>Vorschau – nichts ist übernommen.</strong> Erst mit „Änderungen bestätigen" wird der
+  Snapshot aktualisiert. Einkaufspreise, Verkaufspreise, Zusatzkosten und interne Notizen sind
+  technisch nicht Teil des Imports und bleiben unangetastet.
+</div>
+
+<dl class="dl card">
+  <dt>Ziel-Uhr</dt><dd><a href="/watches/{{ watch.id }}">{{ watch.sku }} – {{ watch.title }}</a></dd>
+  <dt>Quelle</dt><dd>{{ preview.source_url or watch.source_url or "manuell eingefügt" }}</dd>
+  <dt>Eingegangen am</dt><dd>{{ fmt_dt(preview.created_at) }}</dd>
+</dl>
+
+<section class="card">
+  <h2>Vorgeschlagene Änderungen</h2>
+  <table class="table">
+    <thead><tr><th>Feld</th><th>Aktuell (intern)</th><th>Neu (Quelle)</th><th>Wirkung</th></tr></thead>
+    <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><strong>{{ row.label }}</strong></td>
+      <td class="pre">{{ row.old }}</td>
+      <td class="pre">{{ row.new }}</td>
+      <td>
+        {% if row.applies %}<span class="tag tag-ok">{{ row.note }}</span>
+        {% else %}<span class="tag">{{ row.note }}</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if payload_specs %}
+  <details><summary>Neue technische Daten (Text)</summary><p class="pre">{{ payload_specs }}</p></details>
+  {% endif %}
+</section>
+
+{% if preview.pending_images %}
+<section class="card">
+  <h2>Neue Katalogbilder ({{ preview.pending_images | length }})</h2>
+  <div class="img-grid">
+    {% for entry in preview.pending_images %}
+    <figure class="img-card">
+      <a href="/imports/{{ preview.id }}/images/{{ loop.index0 }}" target="_blank">
+        <img src="/imports/{{ preview.id }}/images/{{ loop.index0 }}"
+             alt="Katalogbild {{ loop.index }} (Vorschau)" loading="lazy">
+      </a>
+      <figcaption class="muted">#{{ loop.index }} · {{ entry.width }}×{{ entry.height }}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+  <p class="hint">Werden nach Bestätigung als Katalogbilder (unverändert) ergänzt – eigene Fotos bleiben unberührt.</p>
+</section>
+{% endif %}
+
+{% if preview.status == "pending" %}
+<div class="actions">
+  <form method="post" action="/imports/{{ preview.id }}/confirm" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-primary" type="submit"
+            onclick="return confirm('Änderungen wie aufgezeigt bestätigen?');">
+      Änderungen bestätigen
+    </button>
+  </form>
+  <form method="post" action="/imports/{{ preview.id }}/reject" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-danger" type="submit">Vorschlag verwerfen</button>
+  </form>
+</div>
+{% else %}
+<div class="flash flash-info">Bereits {{ "bestätigt am " ~ fmt_dt(preview.decided_at) if preview.status == "confirmed" else "verworfen" }}.</div>
+{% endif %}
+{% endblock %}

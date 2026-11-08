@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Anzeige {{ platform_labels[platform] }} – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Anzeige: {{ draft_title if draft_title else "Entwurf" }}</h1>
+  <a class="btn" href="/watches/{{ watch.id }}">Zurück</a>
+</div>
+
+<nav class="tabs">
+  {% for p in platforms %}
+  <a class="tab {% if p == platform %}tab-active{% endif %}"
+     href="/watches/{{ watch.id }}/listing?platform={{ p.value }}">{{ platform_labels[p] }}</a>
+  {% endfor %}
+</nav>
+
+{% if error %}
+<div class="flash flash-error">{{ error }}</div>
+{% endif %}
+
+{% if not approved %}
+<div class="flash flash-warning">
+  Importierte Kataloginhalte sind noch nicht freigegeben.
+  <a href="/watches/{{ watch.id }}">Auf der Uhrenseite prüfen und bestätigen.</a>
+</div>
+{% endif %}
+
+{% if hints %}
+<div class="card hint-card"><strong>Hinweis {{ platform_labels[platform] }}:</strong> {{ hints }}</div>
+{% endif %}
+
+{% if missing_fields %}
+<div class="card hint-card">
+  <strong>Nicht gepflegt / entfällt (wird nicht geraten):</strong>
+  <ul>{% for m in missing_fields %}<li>{{ m }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" action="/watches/{{ watch.id }}/listing/save" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="platform" value="{{ platform.value }}">
+
+  <label for="draft-title">Titel {% if is_saved %}<span class="tag tag-ok">gespeicherter Entwurf</span>{% else %}<span class="tag">frisch erzeugt</span>{% endif %}</label>
+  <input id="draft-title" name="title" maxlength="300" required value="{{ draft_title }}">
+  {% if errors.get("title") %}<span class="field-error">{{ errors.title }}</span>{% endif %}
+
+  <label for="draft-body">Text</label>
+  <textarea id="draft-body" name="body" rows="18" spellcheck="true">{{ draft_body }}</textarea>
+  {% if errors.get("body") %}<span class="field-error">{{ errors.body }}</span>{% endif %}
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Entwurf speichern</button>
+    <button class="btn" type="button" data-copy-target="draft-body">In Zwischenablage kopieren</button>
+    <a class="btn" href="/watches/{{ watch.id }}/listing/export?platform={{ platform.value }}&format=txt">TXT herunterladen</a>
+    <a class="btn" href="/watches/{{ watch.id }}/listing/export?platform={{ platform.value }}&format=md">Markdown herunterladen</a>
+  </div>
+  <p class="hint">Kein automatisches Veröffentlichen: Text selbst kopieren und auf der Plattform einfügen.</p>
+</form>
+
+<form method="post" action="/watches/{{ watch.id }}/listing/regenerate">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="platform" value="{{ platform.value }}">
+  <button class="btn" type="submit">Entwurf verwerfen und neu aus Bestand erzeugen</button>
+</form>
+
+<section class="card">
+  <h2>Exportvorschau & ZIP</h2>
+  <p class="muted">Plattform: <strong>{{ platform_labels[platform] }}</strong> · Textdatei:
+    <span class="mono">anzeige-{{ platform.value }}.txt</span></p>
+
+  <form method="get" action="/watches/{{ watch.id }}/listing/zip">
+    <input type="hidden" name="platform" value="{{ platform.value }}">
+    <fieldset>
+      <legend>Bilder auswählen (Reihenfolge = Dateinamen 01…, alle standardmäßig angehakt)</legend>
+      {% if export_pairs %}
+      <ul class="zip-list">
+        {% for entry in export_pairs %}
+        <li class="zip-entry">
+          <label class="checkbox">
+            <input type="checkbox" name="image_ids" value="{{ entry.id }}" checked>
+            <img class="zip-thumb" src="/images/{{ entry.id }}/file" alt="">
+            <span class="mono">{{ entry.name }}</span>
+            {% if entry.label %}<span class="muted">({{ entry.label }})</span>{% endif %}
+            {% if entry.adjusted %}<span class="tag">korrigiert</span>{% endif %}
+            {% if entry.source == "wecatalog" %}<span class="tag tag-warn">Katalog</span>{% endif %}
+          </label>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="muted">Keine exportierbaren Bilder vorhanden – das ZIP enthält nur den Text.</p>
+      {% endif %}
+      {% if excluded_count %}
+      <p class="hint">{{ excluded_count }} Katalogbild(er) sind noch nicht freigegeben und bleiben außen vor.</p>
+      {% endif %}
+    </fieldset>
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">ZIP herunterladen</button>
+    </div>
+    <p class="hint">Das ZIP enthält die ausgewählten Bilder (mit Korrekturen, Originale bleiben unangetastet)
+      plus <span class="mono">anzeige-{{ platform.value }}.txt</span> mit dem oben sichtbaren Text.
+      Interne Daten (Einkauf, Notizen) sind nie enthalten.</p>
+  </form>
+</section>
+{% endblock %}

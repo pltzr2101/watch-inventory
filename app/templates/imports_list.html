@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Importe – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Katalog-Importe</h1>
+  <a class="btn btn-primary" href="/imports/new">+ neuen Importvorschlag</a>
+</div>
+
+{% if previews %}
+<table class="table">
+  <thead><tr><th>Erstellt</th><th>Art</th><th>Titel</th><th>Quelle</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for p in previews %}
+  <tr>
+    <td class="nowrap">{{ fmt_dt(p.created_at) }}</td>
+    <td>{{ "Aktualisierung" if p.kind == "update" else "Neue Uhr" }}</td>
+    <td>{{ p.payload.get("title") or "—" }}</td>
+    <td class="muted">{{ p.source_url or "manuell eingefügt" }}</td>
+    <td>
+      {% if p.status == "pending" %}<span class="tag tag-warn">offen</span>
+      {% elif p.status == "confirmed" %}<span class="tag tag-ok">bestätigt</span>
+      {% else %}<span class="tag">verworfen</span>{% endif %}
+    </td>
+    <td><a class="btn btn-sm" href="/imports/{{ p.id }}">Öffnen</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">Noch keine Importvorschläge.</p>
+{% endif %}
+{% endblock %}

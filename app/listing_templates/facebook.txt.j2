@@ -1,0 +1,25 @@
+{{ title }}
+
+{% if brand %}{{ brand }}{% if model %} {{ model }}{% endif %}
+
+{% endif %}{% if condition %}Zustand: {{ condition }}
+{% endif %}{% if price %}Preis: {{ price }}
+{% endif %}
+{% if accessories %}Lieferumfang: {{ accessories }}
+{% endif %}
+{% if shipping_info %}Versand: {{ shipping_info }}
+{% endif %}
+
+{% if condition_description %}
+Zustand im Detail:
+{{ condition_description }}
+{% endif %}
+{% if specs %}
+Technische Daten:
+{% for spec in specs %}- {{ spec.key }}: {{ spec.value }}
+{% endfor %}
+{% endif %}
+{% if description %}
+{{ description }}
+{% endif %}
+Nachrichten gern per DM.

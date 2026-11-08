@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Fehler {{ status_code_ }} – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h1>Fehler {{ status_code_ }}</h1>
+  <p>{{ detail }}</p>
+  <a class="btn" href="/">Zur Übersicht</a>
+</div>
+{% endblock %}

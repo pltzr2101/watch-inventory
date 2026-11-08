@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Import vorbereiten – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Kataloginhalt importieren</h1>
+  <a class="btn" href="{{ ("/watches/" ~ watch.id) if watch else "/imports" }}">Zurück</a>
+</div>
+
+<div class="card hint-card">
+  <strong>Rahmen:</strong> Nur autorisierte Inhalte, <strong>niemals Preise</strong> aus der Quelle.
+  Alles landet zunächst als <strong>Vorschau</strong> und muss vor der Übernahme geprüft werden.
+  Importierte Inhalte sind intern, bis du sie für Anzeigen ausdrücklich freigibst.
+  <a href="/docs/WECATALOG.md">Details: docs/WECATALOG.md</a>
+</div>
+
+{% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
+
+{% if watch %}
+<p>Ziel-Uhr: <a href="/watches/{{ watch.id }}"><strong>{{ watch.sku }} – {{ watch.title }}</strong></a>
+  <span class="tag tag-warn">Aktualisierung (Vorschau, kein automatisches Überschreiben)</span></p>
+{% else %}
+<p class="muted">Keine Ziel-Uhr gewählt → es wird ein <strong>neuer interner Datensatz</strong> angelegt
+  (nach deiner Bestätigung). Du kannst danach alle Felder noch bearbeiten.</p>
+{% endif %}
+
+<form method="post" action="/imports/new" enctype="multipart/form-data" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="watch_id" value="{{ watch.id if watch else '' }}">
+
+  <fieldset>
+    <legend>Quelle</legend>
+    <label for="source_url">Katalog-URL des Ursprungs (zur Dokumentation)</label>
+    <input id="source_url" name="source_url" type="url" maxlength="500" placeholder="https://www.wecatalog.cn/…" value="">
+
+    <label for="fetch_url">Optionaler Abruf über freigegebenen Endpunkt
+      <span class="hint">(nur mit WECATALOG_API_URL konfiguriert; sonst manuell einfügen)</span></label>
+    <input id="fetch_url" name="fetch_url" type="url" maxlength="500" placeholder="leer = manuelle Eingabe">
+  </fieldset>
+
+  <fieldset>
+    <legend>Inhalte manuell einfügen (aus autorisiertem Zugang übertragen)</legend>
+    <label for="title">Titel *</label>
+    <input id="title" name="title" maxlength="200" value="{{ values.get('title') or '' }}">
+
+    <label for="brand">Marke</label>
+    <input id="brand" name="brand" maxlength="120" value="{{ values.get('brand') or '' }}">
+
+    <label for="model">Modell</label>
+    <input id="model" name="model" maxlength="160" value="{{ values.get('model') or '' }}">
+
+    <label for="description">Beschreibungstext</label>
+    <textarea id="description" name="description" rows="6">{{ values.get('description') or '' }}</textarea>
+
+    <label for="specs_text">Technische Daten (Zeilen <code>Schlüssel: Wert</code> oder JSON)</label>
+    <textarea id="specs_text" name="specs_text" rows="4">{{ values.get('specs_text') or '' }}</textarea>
+    <p class="hint">Preisangaben werden beim Speichern serverseitig automatisch entfernt.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Katalogbilder (optional)</legend>
+    <input type="file" name="files" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+    <p class="hint">Bilder werden gestaffelt (noch nicht der Uhr zugeordnet) gespeichert und erst nach
+      deiner Bestätigung übernommen. Katalogbilder bleiben unverändert.</p>
+  </fieldset>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Vorschau erzeugen</button>
+    <a class="btn" href="{{ ("/watches/" ~ watch.id) if watch else "/imports" }}">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}
