@@ -12,6 +12,9 @@
 services:
   watch-inventory:
     image: ${IMAGE:-ghcr.io/pltzr2101/watch-inventory}:${TAG:-latest}
+    # Ohne diese Zeile übernimmt "Update the stack" alte lokale Bilder:
+    # compose up greift auf das vorhandene latest-Image zu, ohne neu zu ziehen.
+    pull_policy: always
     container_name: watch-inventory
     restart: unless-stopped
     ports:
