@@ -19,7 +19,11 @@ services:
     environment:
       # Pflicht-Secrets: ohne sie startet die App mit klarer Fehlermeldung nicht.
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET fehlt – in den Stack-Env-Variablen setzen (mind. 32 Zeichen, z.B. 'openssl rand -hex 32')}
-      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:?ADMIN_PASSWORD_HASH fehlt – erzeugen mit 'python -m app.security <passwort>'}
+      # Hauptweg: ADMIN_PASSWORD (Klartext) als Stack-Variable eintragen –
+      # die App hasht es beim Start selbst. Alternativ ADMIN_PASSWORD_HASH.
+      # Beides leer? Die App bricht beim Start mit klarer Meldung ab.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
       DATA_DIR: /data
       # Hinter Reverse Proxy/HTTPS auf true setzen:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}

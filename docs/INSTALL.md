@@ -33,24 +33,25 @@ versioniert `ghcr.io/pltzr2101/watch-inventory:0.1.0`.
 openssl rand -hex 32
 ```
 
-**Argon2-Hash des Admin-Logins** – auf dem Deployment-Server ohne
-Repository-Checkout direkt aus dem Image (Package muss öffentlich sein,
-sonst vorher `docker login ghcr.io`):
+**Admin-Login – Hauptweg (empfohlen): Klartext-Passwort.** Als
+`ADMIN_PASSWORD` in die Stack-Variablen eintragen (Schritt 3); die App
+hasht es beim Start selbst (Argon2). Kein Hash, kein Kopieren von
+`$`-Zeichen – so wie bei Grafana, Portainer & Co.
+
+**Alternative (Härtung): Argon2-Hash** statt Klartext, erzeugen auf dem
+Server direkt aus dem Image:
 
 ```bash
 docker run --rm ghcr.io/pltzr2101/watch-inventory:latest \
   python -m app.security 'mein-starkes-passwort'
 ```
 
-Variante aus der Projektumgebung (Entwicklung/CI):
-
-```bash
-python -m app.security 'mein-starkes-passwort'
-```
-
-Tipp: Befehl mit einem führenden Leerzeichen starten, damit das Passwort
-nicht in der Shell-History landet (Voraussetzung: `HISTCONTROL` enthält
-`ignore-space`), oder den History-Eintrag danach löschen.
+> **Wichtig:** Der Hash darf **nur als Stack-Variable** eingetragen
+> werden, **nie direkt in die compose-YAML** – `$`-Zeichen werden dort
+> als Variablen interpretiert und der Wert erreicht verstümmelt die App
+> (`ist kein Argon2-Hash`). In die YAML eingeschrieben muss jedes `$`
+> als `$$` geschrieben werden. Führendes Leerzeichen vor dem `docker
+> run`-Befehl schützt das Passwort vor der Shell-History.
 
 Beide Werte werden in Portainer als Stack-Umgebungsvariablen hinterlegt –
 **nicht** in `docker-compose.yml`, **nicht** ins Repository.
@@ -67,7 +68,8 @@ Beide Werte werden in Portainer als Stack-Umgebungsvariablen hinterlegt –
      Stand stattdessen z. B. `0.1.0` eintragen.
    - `HOST_PORT` = `3080`
    - `SESSION_SECRET` = Wert aus Schritt 2
-   - `ADMIN_PASSWORD_HASH` = Wert aus Schritt 2
+   - `ADMIN_PASSWORD` = dein Login-Passwort (einfachste Variante) –
+     stattdessen auch `ADMIN_PASSWORD_HASH` = Hash aus Schritt 2 möglich
    - optional weitere Werte aus `.env.example` (dort Erklärung je Variable)
    - Alternative: **Load variables from file** mit einer lokal erstellten
      `.env` (Vorlage `.env.example` kopieren, Werte eintragen, Datei danach
@@ -78,10 +80,11 @@ Beide Werte werden in Portainer als Stack-Umgebungsvariablen hinterlegt –
    Compose-Datei. Bei öffentlichen Images weglassen.
 6. **Deploy the stack**.
 
-Das Compose-Design ist absichtlich *fail-fast*: Fehlen `SESSION_SECRET` oder
-`ADMIN_PASSWORD_HASH`, bricht `docker compose` bereits beim Deploy mit einem
-Hinweis ab; startet die App dennoch ohne gültige Werte, beendet sie sich mit
-klarer Fehlermeldung (kein unsicherer Start).
+Das Design ist absichtlich *fail-fast*: Fehlt `SESSION_SECRET`, bricht
+`docker compose` bereits beim Deploy mit einem Hinweis ab. Fehlen **beide**
+Admin-Varianten (`ADMIN_PASSWORD` und `ADMIN_PASSWORD_HASH`), beendet sich der
+Container sofort mit klarer Fehlermeldung (im Portainer-Log sichtbar; kein
+unsicherer Start).
 
 ## 4. Prüfen
 
