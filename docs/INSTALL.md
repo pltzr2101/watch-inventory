@@ -31,10 +31,26 @@ versioniert `ghcr.io/pltzr2101/watch-inventory:0.1.0`.
 ```bash
 # Session-Secret:
 openssl rand -hex 32
+```
 
-# Argon2-Hash des Admin-Logins (aus dem Repository bzw. CI):
+**Argon2-Hash des Admin-Logins** – auf dem Deployment-Server ohne
+Repository-Checkout direkt aus dem Image (Package muss öffentlich sein,
+sonst vorher `docker login ghcr.io`):
+
+```bash
+docker run --rm ghcr.io/pltzr2101/watch-inventory:latest \
+  python -m app.security 'mein-starkes-passwort'
+```
+
+Variante aus der Projektumgebung (Entwicklung/CI):
+
+```bash
 python -m app.security 'mein-starkes-passwort'
 ```
+
+Tipp: Befehl mit einem führenden Leerzeichen starten, damit das Passwort
+nicht in der Shell-History landet (Voraussetzung: `HISTCONTROL` enthält
+`ignore-space`), oder den History-Eintrag danach löschen.
 
 Beide Werte werden in Portainer als Stack-Umgebungsvariablen hinterlegt –
 **nicht** in `docker-compose.yml`, **nicht** ins Repository.
