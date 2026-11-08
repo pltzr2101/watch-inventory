@@ -114,12 +114,28 @@ class Settings:
 def load_settings() -> Settings:
     """Liest die Konfiguration aus der Umgebung und validiert Pflicht-Secrets."""
     session_secret = _require_env("SESSION_SECRET", min_length=32)
-    admin_password_hash = _require_env("ADMIN_PASSWORD_HASH", min_length=20)
-    if not admin_password_hash.startswith(ARGON2_PREFIX):
+    admin_password_hash = (os.environ.get("ADMIN_PASSWORD_HASH") or "").strip()
+    if admin_password_hash and not admin_password_hash.startswith(ARGON2_PREFIX):
         raise ConfigError(
-            "ADMIN_PASSWORD_HASH ist kein Argon2-Hash. Erzeugen mit: "
-            "python -m app.security 'mein-passwort'"
+            "ADMIN_PASSWORD_HASH ist kein Argon2-Hash. Häufigste Ursache: Der "
+            "Wert wurde beim Eintragen verstümmelt ($-Zeichen werden in der "
+            "Stack-YAML als Variablen gelesen). Am einfachsten stattdessen "
+            "ADMIN_PASSWORD (Klartext) in den Stack-Variablen setzen – die App "
+            "hasht es beim Start selbst."
         )
+    if not admin_password_hash:
+        plain_password = (os.environ.get("ADMIN_PASSWORD") or "").strip()
+        if not plain_password:
+            raise ConfigError(
+                "ADMIN_PASSWORD (oder ADMIN_PASSWORD_HASH) fehlt. Die Anwendung "
+                "startet aus Sicherheitsgründen nicht. "
+                "Vorlage und Erklärung: .env.example (Abschnitt 'Secrets')."
+            )
+        # Klartext-Passwort wie bei Grafana & Co.: wird hier sofort intern zu
+        # Argon2 gehasht; der Hash existiert nur im Speicher des Prozesses.
+        from .security import hash_password
+
+        admin_password_hash = hash_password(plain_password)
 
     template_dir_raw = _opt_env("LISTING_TEMPLATE_DIR")
     if template_dir_raw:

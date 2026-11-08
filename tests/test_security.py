@@ -145,3 +145,40 @@ def test_too_short_session_secret_fails_fast(monkeypatch, env) -> None:
     monkeypatch.setenv("SESSION_SECRET", "kurz")
     with pytest.raises(ConfigError):
         create_app()
+
+
+def test_plain_admin_password_is_hashed_on_load(monkeypatch, env) -> None:
+    """ADMIN_PASSWORD (Klartext) reicht – die App hasht beim Start selbst."""
+    from app.config import load_settings
+    from app.security import verify_password
+
+    monkeypatch.delenv("ADMIN_PASSWORD_HASH", raising=False)
+    monkeypatch.setenv("ADMIN_PASSWORD", "mein-passwort-123")
+    settings = load_settings()
+    assert settings.admin_password_hash.startswith("$argon2")
+    assert verify_password(settings.admin_password_hash, "mein-passwort-123")
+
+
+def test_plain_admin_password_takes_precedence_over_missing(monkeypatch, env) -> None:
+    """Ohne ADMIN_PASSWORD UND ohne HASH startet die App nicht (Fail-Fast)."""
+    from app.config import ConfigError, load_settings
+
+    monkeypatch.delenv("ADMIN_PASSWORD_HASH", raising=False)
+    monkeypatch.delenv("ADMIN_PASSWORD", raising=False)
+    with pytest.raises(ConfigError) as exc:
+        load_settings()
+    assert "ADMIN_PASSWORD" in str(exc.value)
+
+
+def test_mangled_password_hash_fails_with_fix_hint(monkeypatch, env) -> None:
+    """Ein durch $-Interpolation verstümmelter Hash wird klar benannt."""
+    from app.config import ConfigError, load_settings
+
+    monkeypatch.setenv(
+        "ADMIN_PASSWORD_HASH", "rgon2id$v=19$m=65536,t=3,p=4$zerstoert$wert"
+    )
+    with pytest.raises(ConfigError) as exc:
+        load_settings()
+    msg = str(exc.value)
+    assert "ADMIN_PASSWORD" in msg  # Hinweis auf den Klartext-Weg
+    assert "$-Zeichen" in msg  # Ursache genannt

@@ -47,7 +47,7 @@ pip install -e ".[dev]"
 
 # Pflicht-Secrets erzeugen:
 export SESSION_SECRET="$(openssl rand -hex 32)"
-export ADMIN_PASSWORD_HASH="$(python -m app.security 'mein-passwort')"
+export ADMIN_PASSWORD='mein-passwort'   # (oder ADMIN_PASSWORD_HASH=…)
 export DATA_DIR=./data
 
 uvicorn --factory app.main:create_app --host 127.0.0.1 --port 8080

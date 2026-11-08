@@ -7,7 +7,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
 export SESSION_SECRET="$(openssl rand -hex 32)"
-export ADMIN_PASSWORD_HASH="$(python -m app.security 'dev-passwort')"
+export ADMIN_PASSWORD='dev-passwort'    # (oder ADMIN_PASSWORD_HASH=…)
 export DATA_DIR=./data
 uvicorn --factory app.main:create_app --host 127.0.0.1 --port 8080
 ```
