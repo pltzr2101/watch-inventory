@@ -11,7 +11,7 @@
       <li class="zip-entry">
         <label class="checkbox">
           <input type="checkbox" name="image_ids" value="{{ entry.id }}" checked>
-          <img class="zip-thumb" src="/images/{{ entry.id }}/file" alt="">
+          <img class="zip-thumb" src="/images/{{ entry.id }}/file?display=1" alt="">
           <span class="mono">{{ entry.name }}</span>
           {% if entry.label %}<span class="muted">({{ entry.label }})</span>{% endif %}
           {% if entry.adjusted %}<span class="tag">korrigiert</span>{% endif %}

@@ -100,7 +100,9 @@ git push origin v0.2.0      # löst Gates + Build + Tag-Push nach ghcr aus
 ```
 
 Ohne Tag wird bei jedem `main`-Push ebenfalls gebaut (`latest` +
-`sha-…` + `build-…`) – für Portainer ist ein **Versionstag** empfohlen.
+`sha-…` + `build-…`). Der Portainer-Stack nutzt standardmäßig
+`latest` (Watchtower-Updates); Versionstage bleiben für
+reproduzierbare Stände und Rollbacks verfügbar.
 
 ## Anzeigen-Vorlagen anpassen
 
@@ -169,6 +171,19 @@ papers → box → wrist) und füllt ausschließlich **leere** Labels;
 manuelle Labels und Pfeil-Sortierung haben immer Vorrang. Auswirkung:
 Exportdateien `01-…`, `02-…` in dieser Reihenfolge (Button
 „Reihenfolge automatisch optimieren“ auf Dump-Review und Uhrenseite).
+
+## iPhone-Fotos (HEIC/HEIF)
+
+Uploads akzeptieren zusätzlich HEIC/HEIF vom iPhone (`pillow-heif`),
+einschließlich 48-MP-Aufnahmen (`MAX_IMAGE_PIXELS` standardmäßig
+80 MP; `MAX_UPLOAD_MB` begrenzt die Dateigröße). Für die Anzeige
+legt die App neben dem unveränderten Original ein JPEG-Derivat an
+(`…preview.jpg`, ≤2048 px); Thumbs holen es über `?display=1`,
+das Löschen entfernt beide Dateien. ZIP-Exporte, Wasserzeichen und
+Korrekturen arbeiten auf optimierten JPEG-Kopien (`01-…jpg`) – die
+Originale bleiben byte-identisch unverändert. Nicht darstellbare
+Originalformate werden nirgends öffentlich ausgeliefert (alle
+Bildrouten liegen hinter Auth).
 
 ## Wasserzeichen (optional, standardmäßig aus)
 

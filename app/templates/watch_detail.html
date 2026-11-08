@@ -101,7 +101,7 @@
     {% for image in watch.images %}
     <figure class="img-card">
       <a href="/images/{{ image.id }}/file" target="_blank">
-        <img src="/images/{{ image.id }}/file" alt="{{ image.original_name }}" loading="lazy">
+        <img src="/images/{{ image.id }}/file?display=1" alt="{{ image.original_name }}" loading="lazy">
       </a>
       <figcaption>
         <span class="mono">#{{ loop.index }}

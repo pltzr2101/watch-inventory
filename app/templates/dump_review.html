@@ -77,7 +77,7 @@
   <ul class="zip-list">
     {% for entry in export_pairs %}
     <li class="zip-entry">
-      <img class="zip-thumb" src="/images/{{ entry.id }}/file" alt="">
+      <img class="zip-thumb" src="/images/{{ entry.id }}/file?display=1" alt="">
       <span class="mono">{{ entry.name }}</span>
       {% if entry.label %}<span class="muted">({{ entry.label }})</span>{% endif %}
       {% if entry.adjusted %}<span class="tag">korrigiert</span>{% endif %}

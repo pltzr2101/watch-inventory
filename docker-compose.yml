@@ -11,7 +11,7 @@
 
 services:
   watch-inventory:
-    image: ${IMAGE:-ghcr.io/pltzr2101/watch-inventory}:${TAG:-0.1.0}
+    image: ${IMAGE:-ghcr.io/pltzr2101/watch-inventory}:${TAG:-latest}
     container_name: watch-inventory
     restart: unless-stopped
     ports:
@@ -24,7 +24,7 @@ services:
       # Hinter Reverse Proxy/HTTPS auf true setzen:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-15}
-      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-80000000}
       LOGIN_MAX_ATTEMPTS: ${LOGIN_MAX_ATTEMPTS:-8}
       LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-300}
       # Wecatalog.cn-Integration: standardmäßig deaktiviert (siehe docs/WEBCATALOG.md):

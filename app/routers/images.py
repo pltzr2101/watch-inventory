@@ -8,8 +8,10 @@
 """
 from __future__ import annotations
 
+import contextlib
+
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
@@ -25,7 +27,13 @@ router = APIRouter(tags=["images"])
 
 _MUTATE = [Depends(verify_csrf)]
 
-MIME_BY_FMT = {"JPEG": "image/jpeg", "PNG": "image/png", "WEBP": "image/webp"}
+MIME_BY_FMT = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+    "HEIC": "image/heic",
+    "HEIF": "image/heif",
+}
 
 
 def load_image(db: Session, image_id: int) -> WatchImage:
@@ -89,6 +97,10 @@ async def upload_images(request: Request, watch_id: str, db=DbDep, settings=Sett
             flash(request, f"{filename}: {exc}", "error")
             continue
         path = image_ops.store_original(data, probe, settings.images_dir)
+        if probe.fmt in {"HEIC", "HEIF"}:
+            # Preview ist optional: ohne sie zeigt die Seite das Original.
+            with contextlib.suppress(OSError):
+                image_ops.write_preview(data, path)
         db.add(
             WatchImage(
                 watch=watch,
@@ -154,10 +166,12 @@ async def image_delete(request: Request, image_id: str, db=DbDep, settings=Setti
     image = load_image(db, _image_id(image_id))
     watch_id = image.watch_id
     path = settings.images_dir / image.stored_name
+    preview = path.with_name(f"{path.stem}.preview.jpg")
     db.delete(image)
     db.commit()
     try:
         path.unlink()
+        preview.unlink(missing_ok=True)
         flash(request, "Bild entfernt.", "success")
     except FileNotFoundError:
         flash(request, "Bild entfernt (Datei war bereits nicht mehr vorhanden).", "info")
@@ -229,6 +243,7 @@ def image_file(
     image_id: str,
     db=DbDep,
     settings=SettingsDep,
+    display: str = "",
     adjusted: str = "",
     brightness: float = 0,
     contrast: float = 0,
@@ -240,6 +255,11 @@ def image_file(
     path = settings.images_dir / image.stored_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Datei fehlt.")
+    if display == "1":
+        # Anzeige-Derivat (HEIC-Original → JPEG); ohne Preview das Original.
+        preview = path.with_name(f"{path.stem}.preview.jpg")
+        if preview.is_file():
+            return FileResponse(preview, media_type="image/jpeg")
 
     adjustments = image.adjustments if adjusted == "1" else None
     if adjusted == "preview" and _editable(image, settings):
