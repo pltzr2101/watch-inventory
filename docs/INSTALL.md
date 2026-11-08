@@ -22,8 +22,9 @@ sind geringer als auf Bare-Metal; Healthcheck und Watchtower funktionieren
 ## 1. Image vorbereiten
 
 Image bauen, versionieren und in die Registry pushen: **`docs/ENTWICKLUNG.md`**.
-Ergebnis ist ein Registry-Pfad mit Versionstag, z. B.
-`ghcr.io/<user>/watch-inventory:0.1.0`.
+Ergebnis ist ein Registry-Pfad wie z. B.
+`ghcr.io/pltzr2101/watch-inventory:latest` (Stack-Standard) bzw.
+versioniert `ghcr.io/pltzr2101/watch-inventory:0.1.0`.
 
 ## 2. Secrets erzeugen (lokal, nie im Repo)
 
@@ -45,7 +46,9 @@ Beide Werte werden in Portainer als Stack-Umgebungsvariablen hinterlegt –
 3. Den Inhalt von `docker-compose.yml` (Repo-Wurzel) komplett einfügen.
 4. Reiter **Environment variables** (bzw. „Environment settings"):
    - `IMAGE` = eigener Registry-Pfad, z. B. `ghcr.io/me/watch-inventory`
-   - `TAG` = `0.1.0` (Versionstag; für Produktion nicht `latest`)
+   - `TAG` = `latest` (Standard, wie beim Poker-Session-Manager: Watchtower
+     zieht neue Builds automatisch). Für einen festen reproduzierbaren
+     Stand stattdessen z. B. `0.1.0` eintragen.
    - `HOST_PORT` = `3080`
    - `SESSION_SECRET` = Wert aus Schritt 2
    - `ADMIN_PASSWORD_HASH` = Wert aus Schritt 2
@@ -81,13 +84,16 @@ com.centurylinklabs.watchtower.enable=true
 markiert den Container für Watchtower (sofern Watchtower im Host-Betrieb mit
 Label-Filter läuft, z. B. `--label-only`). Ablauf neuer Releases:
 
-1. Neues Image mit neuem Tag in die Registry pushen (z. B. `0.1.1`).
-2. In Portainer den Stack bearbeiten: `TAG=0.1.1`, Update ausführen.
-   (Alternativ Watchtower mit fixem Tag-Pattern – Standard-Update des Stacks
-   in Portainer ist der kontrolliertere Weg.)
+1. Der Workflow baut bei jedem `main`-Push automatisch ein neues
+   `latest`-Image (Gates + Versionstage, siehe `docs/ENTWICKLUNG.md`).
+2. In Portainer den Stack neu deployen („Update“) – bei eingetragenem
+   `TAG=latest` wird das frische Image gezogen. Watchtower erledigt das
+   automatisch, sofern aktiv.
+3. Bei fest eingetragenem Versionstag den Wert erhöhen (z. B. `TAG=0.1.1`)
+   und das neue Tag in die Registry pushen (`git tag v0.1.1`).
 
-`latest` für Produktion vermeiden; der Tag ist bewusst konfigurierbar, aber
-standardmäßig versioniert.
+Der Standard ist bewusst `latest` (Muster wie Poker-Session-Manager);
+der Tag bleibt konfigurierbar für reproduzierbare Stände und Rollbacks.
 
 ## 6. Erreichbarkeit / Reverse Proxy / VPN
 

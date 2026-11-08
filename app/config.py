@@ -73,7 +73,7 @@ class Settings:
     cookie_secure: bool = False
     cookie_max_age_seconds: int = 12 * 60 * 60
     max_upload_bytes: int = 15 * 1024 * 1024
-    max_image_pixels: int = 40_000_000
+    max_image_pixels: int = 80_000_000
     login_max_attempts: int = 8
     login_window_seconds: int = 300
     wecatalog_enabled: bool = False
@@ -142,7 +142,7 @@ def load_settings() -> Settings:
             "COOKIE_MAX_AGE_SECONDS", 12 * 60 * 60, 300, 60 * 60 * 24 * 30
         ),
         max_upload_bytes=_int_env("MAX_UPLOAD_MB", 15, 1, 100) * 1024 * 1024,
-        max_image_pixels=_int_env("MAX_IMAGE_PIXELS", 40_000_000, 1_000_000, 500_000_000),
+        max_image_pixels=_int_env("MAX_IMAGE_PIXELS", 80_000_000, 1_000_000, 500_000_000),
         login_max_attempts=_int_env("LOGIN_MAX_ATTEMPTS", 8, 1, 100),
         login_window_seconds=_int_env("LOGIN_WINDOW_SECONDS", 300, 10, 3600),
         wecatalog_enabled=_bool_env("WECATALOG_ENABLED", False),

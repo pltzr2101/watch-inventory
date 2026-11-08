@@ -17,8 +17,9 @@ automatisierte Veröffentlichung auf Plattformen.
 
 - **Bestandsverwaltung:** Uhren anlegen/bearbeiten/löschen, fünf
   Bestandsstatus (Bestand in DE, Bestand in China, Unterwegs, Reserviert,
-  Verkauft) mit Statushistorie, Volltextsuche, Geldbeträge als Cents,
-  Statushistorie, Upload-Fotoverwaltung.
+  Verkauft), Volltextsuche, Geldbeträge als Cents, Upload-Fotoverwaltung
+  (JPEG/PNG/WebP und HEIC/HEIF vom iPhone, bis 48 MP) mit automatischer
+  JPEG-Ansicht – Originale bleiben unverändert.
 - **Box-Option** (`box_option`: Ohne Box / Box inklusive / Box optional),
   Pflichtfelder werden nie geraten – leere Angaben erscheinen als
   „nicht gepflegt“.
@@ -58,7 +59,7 @@ Ohne `SESSION_SECRET`/`ADMIN_PASSWORD_HASH` startet die App absichtlich **nicht*
 ## Tests, Lint, Typecheck
 
 ```bash
-pytest                 # 75 Tests (Geschäftslogik, Rechte, Export, Upload, ZIP, Import)
+pytest                 # 84 Tests (Geschäftslogik, Rechte, Export, Upload/HEIC, ZIP, Import)
 ruff check app tests   # muss leer sein
 mypy app tests         # muss sauber sein
 ```

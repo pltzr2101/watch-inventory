@@ -85,7 +85,7 @@ def test_reject_oversize_upload(auth_client, env) -> None:
 
 def test_reject_pixel_bomb(auth_client, env) -> None:
     watch_id = create_watch(auth_client)
-    bomb = png_with_dims(7000, 7000)  # 49 Mio. Pixel > Standardlimit 40 Mio.
+    bomb = png_with_dims(12000, 12000)  # 144 Mio. Pixel > Standardlimit 80 Mio.
     r = _upload(auth_client, watch_id, {"files": ("bomb.png", bomb, "image/png")})
     assert r.status_code == 303
     assert list((Path(env) / "images").glob("*")) == []
@@ -286,3 +286,83 @@ def test_watermark_only_on_export_copies(auth_client, env) -> None:
     assert _image_bytes(plain) != _image_bytes(marked)  # Wasserzeichen wirkt
     # ... und das gespeicherte Original ist nach beiden Exporten unangetastet:
     assert stored[0].read_bytes() == original_bytes
+
+
+def _heic_bytes(width: int = 64, height: int = 64, color=(70, 80, 90)) -> bytes:
+    """iPhone-nahes HEIC (Encodierung über pillow-heif, Opener aus image_ops)."""
+    import io
+
+    import pillow_heif
+    from PIL import Image
+
+    from app.services import image_ops  # noqa: F401  (registriert den HEIC-Opener)
+
+    buf = io.BytesIO()
+    pillow_heif.from_pillow(Image.new("RGB", (width, height), color)).save(buf)
+    return buf.getvalue()
+
+
+def test_heic_upload_preview_and_delete_cleanup(auth_client, env) -> None:
+    watch_id = create_watch(auth_client)
+    heic = _heic_bytes()
+    r = _upload(auth_client, watch_id, {"files": ("IMG_0001.heic", heic, "image/heic")})
+    assert r.status_code == 303, r.text[:400]
+
+    images_dir = Path(env) / "images"
+    files = sorted(p.name for p in images_dir.iterdir())
+    # pillow-heif meldet das Format als HEIF (Endung .heif/.heic je Quelldatei):
+    originals = [n for n in files if n.endswith((".heic", ".heif"))]
+    assert len(originals) == 1, files
+    previews = [images_dir / n for n in files if n.endswith(".preview.jpg")]
+    assert len(previews) == 1, files
+    # Original byte-identisch, Preview als JPEG-Derivat daneben:
+    assert (images_dir / originals[0]).read_bytes() == heic
+
+    import re
+
+    page = auth_client.get(f"/watches/{watch_id}")
+    image_id = re.search(r"/images/(\d+)/adjust", page.text).group(1)
+
+    # /file = unverändertes HEIC-Original, /file?display=1 = JPEG-Ansicht:
+    raw = auth_client.get(f"/images/{image_id}/file")
+    assert raw.content == heic
+    assert raw.headers["content-type"] in {"image/heic", "image/heif"}
+    shown = auth_client.get(f"/images/{image_id}/file?display=1")
+    assert shown.headers["content-type"] == "image/jpeg"
+    assert shown.content != heic
+
+    # Löschen entfernt Original UND Preview:
+    csrf = csrf_for(auth_client, f"/watches/{watch_id}")
+    post_form(
+        auth_client,
+        f"/images/{image_id}/delete",
+        {},
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert list(images_dir.iterdir()) == []
+
+
+def test_heic_zip_export_gets_jpg_name_and_jpeg_content(auth_client) -> None:
+    watch_id = create_watch(auth_client)
+    _upload(auth_client, watch_id, {"files": ("dial.heic", _heic_bytes(), "image/heic")})
+    r = auth_client.get(f"/watches/{watch_id}/listing/zip?platform=reddit")
+    assert r.status_code == 200
+
+    import io
+    import zipfile
+
+    from PIL import Image
+
+    with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+        names = zf.namelist()
+        assert "01-dial.jpg" in names, names
+        assert not any(n.endswith((".heic", ".heif")) for n in names)
+        with Image.open(io.BytesIO(zf.read("01-dial.jpg"))) as img:
+            assert img.format == "JPEG"  # Endung und Inhalt stimmen überein
+
+
+def test_default_pixel_limit_fits_48mp_iphone_photos() -> None:
+    from app.config import load_settings
+
+    assert load_settings().max_image_pixels >= 48_000_000

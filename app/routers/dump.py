@@ -11,6 +11,8 @@
 """
 from __future__ import annotations
 
+import contextlib
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from starlette.datastructures import UploadFile
@@ -159,6 +161,10 @@ async def dump_create(request: Request, db=DbDep, settings=SettingsDep):
         for position, (filename, data, probe) in enumerate(prepared):
             path = image_ops.store_original(data, probe, settings.images_dir)
             stored_paths.append(path)
+            if probe.fmt in {"HEIC", "HEIF"}:
+                # Preview ist optional: ohne sie zeigt die Seite das Original.
+                with contextlib.suppress(OSError):
+                    image_ops.write_preview(data, path)
             db.add(
                 WatchImage(
                     watch=watch,
@@ -179,6 +185,7 @@ async def dump_create(request: Request, db=DbDep, settings=SettingsDep):
         db.rollback()
         for path in stored_paths:
             path.unlink(missing_ok=True)
+            path.with_name(f"{path.stem}.preview.jpg").unlink(missing_ok=True)
         flash(request, "Speichern fehlgeschlagen – es wurden keine Daten übernommen.", "error")
         return _render_dump(
             request,

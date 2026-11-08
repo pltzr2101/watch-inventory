@@ -13,9 +13,12 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from PIL import Image, ImageEnhance, UnidentifiedImageError
+from PIL import Image, ImageEnhance, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 
-ALLOWED_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
+register_heif_opener()  # HEIC/HEIF (iPhone) über die normale PIL-API öffnen
+
+ALLOWED_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp", "HEIC": ".heic", "HEIF": ".heif"}
 ADJUST_MIN = 0.1
 ADJUST_MAX = 2.0
 JPEG_QUALITY = 92
@@ -50,7 +53,7 @@ def probe_image(data: bytes, *, max_bytes: int, max_pixels: int) -> ImageProbe:
         raise ImageValidationError("Bild ist zu groß (Pixelzahl überschreitet Limit).") from exc
     except (UnidentifiedImageError, OSError, SyntaxError, ValueError) as exc:
         raise ImageValidationError(
-            "Kein gültiges Bildformat (erkannt werden JPEG, PNG und WebP)."
+            "Kein gültiges Bildformat (erkannt werden JPEG, PNG, WebP und HEIC/HEIF vom iPhone)."
         ) from exc
 
     try:
@@ -95,10 +98,30 @@ def sanitize_label(raw: str | None) -> str | None:
     return text[:40] or None
 
 
+def write_preview(data: bytes, stored_path: Path) -> Path:
+    """HEIC/HEIF-Original → JPEG-Ansicht (≤2048px) neben dem Original.
+
+    Browser können HEIC meist nicht darstellen; die Seite zeigt stattdessen
+    dieses Derivat (`?display=1`). Das Original bleibt byte-identisch liegen.
+    """
+    import io as _io
+
+    from PIL import Image, ImageOps
+
+    with Image.open(_io.BytesIO(data)) as src:
+        img: Image.Image = ImageOps.exif_transpose(src).convert("RGB")
+        img.thumbnail((2048, 2048), Image.Resampling.LANCZOS)
+        preview = stored_path.with_name(f"{stored_path.stem}.preview.jpg")
+        img.save(preview, format="JPEG", quality=88, optimize=True)
+    return preview
+
+
 def export_filename(index: int, label: str | None, ext: str) -> str:
     """„01-front.jpg“ – Reihenfolge zweistellig, Label bereinigt, Dedup später."""
     safe_label = sanitize_label(label) or "bild"
-    if ext not in ALLOWED_FORMATS.values():
+    # Exporte sind stets optimierte Kopien – Endungen, die nicht mehr zum
+    # Inhalt passen (HEIC-Original wird als JPEG exportiert), normalisieren:
+    if ext not in ALLOWED_FORMATS.values() or ext in {".heic", ".heif"}:
         ext = ".jpg"
     return f"{index:02d}-{safe_label}{ext}"
 
@@ -115,9 +138,11 @@ def optimize_for_export(data: bytes, *, max_edge: int, quality: int) -> bytes:
     from PIL import Image, ImageOps
 
     with Image.open(_io.BytesIO(data)) as opened:
-        # exif_transpose liefert Image.Image (nicht ImageFile) → eigene Variable.
+        # format VOM Original lesen: exif_transpose gibt ein neues Image ohne
+        # format-Attribut zurück (sonst würde PNG/WEBP fälschlich als JPEG
+        # exportiert). transpose liefert zudem Image statt ImageFile (mypy).
+        fmt = (opened.format or "JPEG").upper()
         img: Image.Image = ImageOps.exif_transpose(opened)
-        fmt = (img.format or "JPEG").upper()
         needs_resize = max_edge > 0 and max(img.size) > max_edge
         if needs_resize:
             img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
@@ -144,8 +169,9 @@ def apply_watermark(data: bytes, text: str) -> bytes:
 
     from PIL import Image, ImageDraw, ImageFont
 
-    with Image.open(_io.BytesIO(data)) as img:
-        fmt = (img.format or "JPEG").upper()
+    with Image.open(_io.BytesIO(data)) as src:
+        fmt = (src.format or "JPEG").upper()
+        img: Image.Image = ImageOps.exif_transpose(src)
         base = img.convert("RGBA")
         width, height = base.size
         font_size = max(14, width // 34)
@@ -240,9 +266,10 @@ def render_adjusted(path: Path, adjustments: dict | None, *, max_pixels: int) ->
         return None
     adj = sanitize_adjustments(adjustments) or {}
     with Image.open(path) as _opened:
-        img: Image.Image = _opened
+        # format VOM Original lesen (exif_transpose verwirft es):
+        original_format = (_opened.format or "JPEG").upper()
+        img: Image.Image = ImageOps.exif_transpose(_opened)
         img.load()
-        original_format = (img.format or "JPEG").upper()
         width, height = img.size
 
         crop = adj.get("crop")
