@@ -66,7 +66,9 @@ mypy app tests         # muss sauber sein
 ## Produktion / Portainer
 
 Vollständige Anleitung: **`docs/INSTALL.md`** (Stack, Secrets, Registry-Login,
-Port 3080, Watchtower). Image-Build und Registry-Push: `docs/ENTWICKLUNG.md`.
+Port 3080, Watchtower). Image-Build und Registry-Push: `docs/ENTWICKLUNG.md` –
+der Repo-Workflow `.github/workflows/docker-publish.yml` führt Gates aus und
+pusht bei jedem `main`-Push bzw. `v*`-Tag automatisch nach `ghcr.io`.
 Daten, Backups, Updates, Restore: `docs/BACKUP.md`.
 
 ## Wecatalog.cn-Integration

@@ -77,10 +77,30 @@ Regeln für Tags:
 
 ### CI-Variante (empfohlen)
 
-Ein GitHub-Actions-Workflow (oder vergleichbar) kann bei jedem Tag `v*`:
-`pytest` + `ruff` + `mypy` ausführen, `docker buildx build --push` für die
-konfigurierten Plattformen und den Tag aus der PyPI-/git-Version ableiten.
-Registry-Zugangsdaten (GHCR-Token) liegen als CI-Secret, niemals im Repo.
+Der Repo-Workflow **`.github/workflows/docker-publish.yml`** (gleiche Struktur
+wie beim Poker-Session-Manager) übernimmt das vollständig:
+
+- **Trigger:** Push auf `main`, git-Tags `v*`, oder manuell
+  (`workflow_dispatch`).
+- **Gates vor dem Build:** `ruff` → `mypy` → `pytest` – ein rotes Gate
+  veröffentlicht kein Image.
+- **Registry-Push:** `ghcr.io/<user>/<repo>` mit den Tags `latest` (nur
+  `main`), `sha-…`, `build-<run>` sowie semver `X.Y.Z` und `X.Y` aus dem
+  git-Tag. Authentifizierung über das repo-interne `GITHUB_TOKEN`
+  (`permissions: packages: write`) – **kein zusätzliches CI-Secret**,
+  Zugangsdaten liegen nirgends im Repo.
+- **Plattform:** `linux/amd64` (getestet; s. Architekturhinweis unten).
+
+**Release-Ablauf:**
+
+```bash
+# 1. Version in pyproject.toml anheben (semantisch), auf main committen
+git tag v0.2.0
+git push origin v0.2.0      # löst Gates + Build + Tag-Push nach ghcr aus
+```
+
+Ohne Tag wird bei jedem `main`-Push ebenfalls gebaut (`latest` +
+`sha-…` + `build-…`) – für Portainer ist ein **Versionstag** empfohlen.
 
 ## Anzeigen-Vorlagen anpassen
 
