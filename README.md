@@ -35,6 +35,10 @@ automatisierte Veröffentlichung auf Plattformen.
   Plattform (manuell, kein Auto-Posten).
 - **Wecatalog.cn-Import:** standardmäßig deaktiviertes Feature-Flag
   (siehe unten).
+- **UI „Horological Atelier":** dunkles Atelier-Design mit lokal gehosteten
+  Schriften (Fraunces/Jost, OFL-Lizenzen unter `app/static/fonts/`), Messing-
+  Akzente, Status-Badges, subtile Lad-Animationen, responsive; reines CSS,
+  kein JS-Framework, keine externen Requests.
 - **Nicht enthalten (bewusst):** öffentliche Bestandsseite, Analytics,
   Shop-/Checkout-Funktionen – Vorbereitungen dazu in
   `docs/spaete-ausbaustufen.md`.
