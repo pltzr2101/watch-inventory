@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
 from ..csrf import verify_csrf
-from ..deps import DbDep, SettingsDep, load_watch
+from ..deps import DbDep, SettingsDep, load_watch, safe_next
 from ..flash import flash
 from ..models import ImageSource, WatchImage
-from ..services import image_ops
+from ..services import image_classify, image_ops
 from ..templating import render
 
 router = APIRouter(tags=["images"])
@@ -45,6 +45,22 @@ def _editable(image: WatchImage, settings) -> bool:  # type: ignore[no-untyped-d
     if image.source != ImageSource.WECATALOG:
         return True
     return bool(settings.wecatalog_allow_image_edit)
+
+
+@router.post("/watches/{watch_id}/images/auto-order", dependencies=_MUTATE)
+async def images_auto_order(request: Request, watch_id: str, db=DbDep):
+    """Reihenfolge nach Bildrolle (Dial → … → Box) + leere Labels auffüllen."""
+    watch = load_watch(db, watch_id)
+    form = await request.form()
+    image_classify.auto_order(list(watch.images))
+    db.commit()
+    flash(
+        request,
+        "Bilder automatisch sortiert und Rollen ergänzt (manuelle Labels bleiben).",
+        "success",
+    )
+    location = safe_next(form.get("next"), f"/watches/{watch.id}")
+    return Response(status_code=303, headers={"location": location})
 
 
 @router.post("/watches/{watch_id}/images", dependencies=_MUTATE)

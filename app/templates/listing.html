@@ -35,6 +35,8 @@
 </div>
 {% endif %}
 
+{% include "_publication_card.html" %}
+
 <form method="post" action="/watches/{{ watch.id }}/listing/save" class="form-grid">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="platform" value="{{ platform.value }}">
@@ -63,42 +65,7 @@
 </form>
 
 <section class="card">
-  <h2>Exportvorschau & ZIP</h2>
-  <p class="muted">Plattform: <strong>{{ platform_labels[platform] }}</strong> · Textdatei:
-    <span class="mono">anzeige-{{ platform.value }}.txt</span></p>
-
-  <form method="get" action="/watches/{{ watch.id }}/listing/zip">
-    <input type="hidden" name="platform" value="{{ platform.value }}">
-    <fieldset>
-      <legend>Bilder auswählen (Reihenfolge = Dateinamen 01…, alle standardmäßig angehakt)</legend>
-      {% if export_pairs %}
-      <ul class="zip-list">
-        {% for entry in export_pairs %}
-        <li class="zip-entry">
-          <label class="checkbox">
-            <input type="checkbox" name="image_ids" value="{{ entry.id }}" checked>
-            <img class="zip-thumb" src="/images/{{ entry.id }}/file" alt="">
-            <span class="mono">{{ entry.name }}</span>
-            {% if entry.label %}<span class="muted">({{ entry.label }})</span>{% endif %}
-            {% if entry.adjusted %}<span class="tag">korrigiert</span>{% endif %}
-            {% if entry.source == "wecatalog" %}<span class="tag tag-warn">Katalog</span>{% endif %}
-          </label>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="muted">Keine exportierbaren Bilder vorhanden – das ZIP enthält nur den Text.</p>
-      {% endif %}
-      {% if excluded_count %}
-      <p class="hint">{{ excluded_count }} Katalogbild(er) sind noch nicht freigegeben und bleiben außen vor.</p>
-      {% endif %}
-    </fieldset>
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit">ZIP herunterladen</button>
-    </div>
-    <p class="hint">Das ZIP enthält die ausgewählten Bilder (mit Korrekturen, Originale bleiben unangetastet)
-      plus <span class="mono">anzeige-{{ platform.value }}.txt</span> mit dem oben sichtbaren Text.
-      Interne Daten (Einkauf, Notizen) sind nie enthalten.</p>
-  </form>
+  <h2>Exportvorschau &amp; ZIP</h2>
+  {% include "_zip_form.html" %}
 </section>
 {% endblock %}

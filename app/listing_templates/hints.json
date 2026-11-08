@@ -1,4 +1,6 @@
 {
-  "reddit": "Reddit: Markdown-Format (**fett**, - Listen). Vor dem Posten die Regeln der jeweiligen Subreddit prüfen (z. B. Verkaufsverifikation, Flairs). Keine Übertreibungen bei Zustand oder Echtheit.",
-  "facebook": "Facebook-Gruppen: Gruppenregeln für Verkaufsangebote beachten; Fotos am besten direkt als Album hochladen; Preis deutlich im Text nennen, wenn die Gruppe es verlangt."
+  "reddit": "Reddit: Vor dem Posten die Regeln der jeweiligen Subreddit prüfen (z. B. Verkaufsverifikation, Flairs). Keine Übertreibungen bei Zustand oder Echtheit.",
+  "reddit_code": "Reddit mit Seller-Code: Titel endet mit ✅ Seller Code: 1949, der Code steht zusätzlich unter dem Preis. Sonst wie Reddit (Sub-Regeln/Flairs prüfen).",
+  "facebook": "Facebook-Gruppen: Gruppenregeln für Verkaufsangebote beachten; Fotos am besten direkt als Album hochladen; Preis deutlich im Text nennen, wenn die Gruppe es verlangt.",
+  "telegram": "Telegram: reiner Text für den Bot – Titel und Text werden getrennt eingefügt; keine Markdown-Spezialitäten nötig, Layout bleibt wie Reddit-Vorlage."
 }

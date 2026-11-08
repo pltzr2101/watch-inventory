@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
 
 from ..models import ListingPlatform, Provenance, Watch
 from ..money import format_money
@@ -24,20 +24,30 @@ from ..money import format_money
 DEFAULT_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "listing_templates"
 PLATFORM_LABELS = {
     ListingPlatform.REDDIT: "Reddit",
+    ListingPlatform.REDDIT_CODE: "Reddit (Seller-Code)",
     ListingPlatform.FACEBOOK: "Facebook-Gruppe",
+    ListingPlatform.TELEGRAM: "Telegram",
 }
 
 # Felder, die überhaupt erst in Anzeigenkontext gelangen dürfen.
-_PUBLIC_SAFE_FIELDS = (
-    "title",
-    "brand",
-    "model",
-    "condition",
-    "condition_description",
-    "included_accessories",
-    "shipping_info",
-    "description",
-    "specs",
+TEMPLATE_CONTEXT_KEYS = frozenset(
+    {
+        "title",
+        "brand",
+        "model",
+        "price",
+        "condition",
+        "condition_description",
+        "accessories",
+        "shipping_info",
+        "description",
+        "specs",
+        "factory",
+        "movement",
+        "box",
+        "sku",
+        "missing_fields",
+    }
 )
 
 
@@ -99,6 +109,22 @@ def build_context(watch: Watch) -> dict:
 
     title = take("title", "Titel", watch.title)
 
+    def spec_value(*wanted: str) -> str | None:
+        lowered = {w.lower() for w in wanted}
+        for item in specs_list:
+            if item["key"].lower() in lowered:
+                return item["value"]
+        return None
+
+    # Factory/Movement als bequeme Zugriffe auf die technischen Daten;
+    # nur aus freigegebenen/gepflegten Specs ableitbar (nie raten).
+    factory = spec_value("factory", "hersteller", "manufacturer") if specs else None
+    movement = spec_value("movement", "werk", "kaliber", "caliber", "calibre") if specs else None
+    if factory is None and specs:
+        missing.append("Factory (Hersteller)")
+    if movement is None and specs:
+        missing.append("Werk (Movement)")
+
     context = {
         "title": title,
         "sku": watch.sku,
@@ -115,25 +141,44 @@ def build_context(watch: Watch) -> dict:
         "shipping_info": take("shipping_info", "Versandinformationen", watch.shipping_info),
         "description": take("description", "Beschreibung", watch.description),
         "specs": specs_list,
+        "factory": factory,
+        "movement": movement,
+        # Box-Option: None = nicht angegeben → Templates lassen die Angabe weg.
+        "box": watch.box_option,
         "missing_fields": missing,
     }
     # Defense in depth: nur die Template-Schlüssel durchreichen – vertrauliche
     # Felder (Einkauf, Notizen, Quell-Snapshot) sind gar nicht Teil des Kontexts.
-    allowed = {
-        "title",
-        "brand",
-        "model",
-        "price",
-        "condition",
-        "condition_description",
-        "accessories",
-        "shipping_info",
-        "description",
-        "specs",
-        "sku",
-        "missing_fields",
-    }
-    return {key: value for key, value in context.items() if key in allowed}
+    return {key: value for key, value in context.items() if key in TEMPLATE_CONTEXT_KEYS}
+
+
+def sample_context() -> dict:
+    """Vollständiger Beispielkontext für Vorlagenvalidierung und -vorschau.
+
+    Enthält ausschließlich unverbindliche Beispielwerte und niemals echte
+    Bestands- oder vertrauliche Daten (Credentials/Preise etc. ersinnen).
+    """
+    base: dict = dict.fromkeys(TEMPLATE_CONTEXT_KEYS)
+    base.update(
+        {
+            "title": "Clean Factory Submariner 126610LN",
+            "sku": "U-0001",
+            "brand": "Clean Factory",
+            "model": "Submariner 126610LN",
+            "price": "1.234,56 €",
+            "condition": "Neu",
+            "condition_description": "Ungetragen, Etiketten vorhanden.",
+            "accessories": "Box, Papiere, volle Armbandlänge",
+            "shipping_info": "DHL versichert, 1–2 Tage nach Zahlung",
+            "description": "Beispielhafte Kurzbeschreibung.",
+            "specs": [{"key": "Kaliber", "value": "Clone VS352"}],
+            "factory": "Clean Factory",
+            "movement": "VS352",
+            "box": "optional",
+            "missing_fields": [],
+        }
+    )
+    return base
 
 
 def _environment(settings) -> Environment:  # type: ignore[no-untyped-def]
@@ -165,7 +210,7 @@ def load_hints(settings) -> dict[str, str]:  # type: ignore[no-untyped-def]
 
 def generate(watch: Watch, platform: ListingPlatform, settings) -> GeneratedListing:
     """Erzeugt Titel und Textentwurf aus den tatsächlich gepflegten Daten."""
-    if platform not in (ListingPlatform.REDDIT, ListingPlatform.FACEBOOK):
+    if platform not in PLATFORM_LABELS:
         raise ValueError(f"Unbekannte Plattform: {platform}")
     context = build_context(watch)
     if context["title"] is None:
@@ -177,10 +222,21 @@ def generate(watch: Watch, platform: ListingPlatform, settings) -> GeneratedList
     env = _environment(settings)
     body = env.get_template(f"{platform.value}.txt.j2").render(**context)
 
-    parts = [str(context["title"]).strip()]
-    if context["price"]:
-        parts.append(str(context["price"]))
-    title = " | ".join(parts)
+    # Titelvorlage <plattform>.title.txt.j2 (optional); sonst klassische
+    # Zusammenstellung Titel | Preis (wird durch Uploads/Editor überschreibbar).
+    try:
+        rendered_title = env.get_template(f"{platform.value}.title.txt.j2").render(**context)
+        title = rendered_title.strip()
+    except TemplateNotFound:
+        parts = [str(context["title"]).strip()]
+        if context["price"]:
+            parts.append(str(context["price"]))
+        title = " | ".join(parts)
+    if not title:
+        parts = [str(context["title"]).strip()]
+        if context["price"]:
+            parts.append(str(context["price"]))
+        title = " | ".join(parts)
 
     return GeneratedListing(
         platform=platform,

@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
@@ -16,13 +17,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..csrf import verify_csrf
-from ..deps import DbDep, SettingsDep, load_watch
+from ..deps import DbDep, SettingsDep, load_watch, safe_next
 from ..flash import flash
 from ..models import (
     ImageSource,
     ListingPlatform,
+    Publication,
+    PublicationStatus,
     Watch,
     WatchImage,
+    utcnow,
 )
 from ..models import (
     ListingDraft as ListingDraftRow,
@@ -124,6 +128,31 @@ def _export_view(watch: Watch) -> tuple[list[dict], int]:
     return pairs, excluded
 
 
+def _listing_extra(db: Session, watch: Watch, plat: ListingPlatform, settings) -> dict:
+    """Gemeinsamer Template-Zusatz: Veröffentlichungsstatus + Wasserzeichen-Defaults."""
+    pub = db.scalar(
+        select(Publication).where(
+            Publication.watch_id == watch.id, Publication.platform == plat
+        )
+    )
+    return {
+        "pub_status": pub.status if pub else PublicationStatus.DRAFT.value,
+        "pub_posted_at": pub.posted_at if pub else None,
+        "pub_url": pub.url if pub else None,
+        "watermark_enabled": settings.watermark_enabled,
+        "watermark_text": settings.watermark_text,
+        "next_value": f"/watches/{watch.id}/listing?platform={plat.value}",
+    }
+
+
+def _listing_location(watch: Watch, plat: ListingPlatform, next_raw) -> dict:
+    return {
+        "location": safe_next(
+            next_raw, f"/watches/{watch.id}/listing?platform={plat.value}"
+        )
+    }
+
+
 @router.get("/watches/{watch_id}/listing")
 def listing_page(
     request: Request,
@@ -160,6 +189,7 @@ def listing_page(
         excluded_count=excluded_count,
         approved=listing_approved(watch),
         errors={},
+        **_listing_extra(db, watch, plat, settings),
     )
 
 
@@ -197,6 +227,7 @@ async def listing_save(request: Request, watch_id: str, db=DbDep, settings=Setti
             excluded_count=excluded_count,
             approved=listing_approved(watch),
             errors=errors,
+            **_listing_extra(db, watch, plat, settings),
         )
 
     draft = db.scalar(
@@ -212,10 +243,7 @@ async def listing_save(request: Request, watch_id: str, db=DbDep, settings=Setti
         draft.body = body
     db.commit()
     flash(request, f"Entwurf für {PLATFORM_LABELS[plat]} gespeichert.", "success")
-    return Response(
-        status_code=303,
-        headers={"location": f"/watches/{watch.id}/listing?platform={plat.value}"},
-    )
+    return Response(status_code=303, headers=_listing_location(watch, plat, form.get("next")))
 
 
 @router.post("/watches/{watch_id}/listing/regenerate", dependencies=_MUTATE)
@@ -232,10 +260,46 @@ async def listing_regenerate(request: Request, watch_id: str, db=DbDep):
         db.delete(draft)
         db.commit()
         flash(request, "Gespeicherten Entwurf verworfen – neu erzeugt.", "info")
-    return Response(
-        status_code=303,
-        headers={"location": f"/watches/{watch.id}/listing?platform={plat.value}"},
+    return Response(status_code=303, headers=_listing_location(watch, plat, form.get("next")))
+
+
+@router.post("/watches/{watch_id}/listing/publication", dependencies=_MUTATE)
+async def listing_publication(request: Request, watch_id: str, db=DbDep):
+    """Veröffentlichungsstatus je Plattform pflegen (Tracking, kein Auto-Posten)."""
+
+    watch = load_watch(db, watch_id)
+    form = await request.form()
+    plat = _platform(str(form.get("platform") or ""))
+    status_raw = str(form.get("status") or "")
+    if status_raw not in {s.value for s in PublicationStatus}:
+        raise HTTPException(status_code=400, detail="Unbekannter Veröffentlichungsstatus.")
+
+    url = str(form.get("url") or "").strip()[:500]
+    posted_at = None
+    if status_raw == PublicationStatus.POSTED.value:
+        if url:
+            parts = urlsplit(url)
+            if parts.scheme not in {"http", "https"} or not parts.netloc:
+                raise HTTPException(status_code=400, detail="URL muss http(s) sein.")
+        posted_at = utcnow()
+    else:
+        url = ""
+
+    pub = db.scalar(
+        select(Publication).where(
+            Publication.watch_id == watch.id, Publication.platform == plat
+        )
     )
+    if pub is None:
+        pub = Publication(watch=watch, platform=plat)
+        db.add(pub)
+    pub.status = status_raw
+    pub.posted_at = posted_at
+    pub.url = url or None
+    db.commit()
+    label = PublicationStatus(status_raw).label
+    flash(request, f"{PLATFORM_LABELS[plat]}: {label}", "success")
+    return Response(status_code=303, headers=_listing_location(watch, plat, form.get("next")))
 
 
 @router.get("/watches/{watch_id}/listing/export")
@@ -283,6 +347,15 @@ def listing_zip(
     watch = load_watch(db, watch_id)
     plat = _platform(platform)
 
+    watermark_raw = request.query_params.get("watermark")
+    if watermark_raw is None:
+        watermark_on = bool(settings.watermark_enabled)
+    else:
+        watermark_on = watermark_raw in {"1", "on", "true", "yes"}
+    watermark_text = str(request.query_params.get("watermark_text") or "").strip()[:80]
+    if not watermark_text:
+        watermark_text = str(settings.watermark_text or "")
+
     try:
         title, body, _, _, _ = _current_text(db, watch, plat, settings)
     except ValueError as exc:
@@ -299,6 +372,9 @@ def listing_zip(
         if not path.is_file():
             continue
         data: bytes | None = None
+        locked = (
+            image.source == ImageSource.WECATALOG and not settings.wecatalog_allow_image_edit
+        )
         if image.adjustments and (
             image.source != ImageSource.WECATALOG or settings.wecatalog_allow_image_edit
         ):
@@ -310,6 +386,13 @@ def listing_zip(
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
         if data is None:
             data = path.read_bytes()
+        if not locked:
+            # Exportkopie optimieren und ggf. wasserzeichen – nie das Original.
+            data = image_ops.optimize_for_export(
+                data, max_edge=settings.export_max_edge, quality=settings.export_quality
+            )
+            if watermark_on and watermark_text:
+                data = image_ops.apply_watermark(data, watermark_text)
         entries.append((_arcname(index, image), data))
 
     if not entries:

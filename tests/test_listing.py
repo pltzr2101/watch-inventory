@@ -52,9 +52,12 @@ def test_missing_fields_are_omitted_not_guessed(auth_client) -> None:
     r = auth_client.get(f"/watches/{watch_id}/listing?platform=facebook")
     assert r.status_code == 200
     assert "Lieferumfang:" not in r.text
-    assert "Versand:" not in r.text
     assert "Preis:" not in r.text
     assert "Zustand:" not in r.text
+    # Statische Betreiber-Stammdaten (Standort/Zahlung/Versand) sind
+    # Template-Vorgabe und keine geratenen Daten – aber KEIN Feld darf mit
+    # "None" oder anderen Platzhalter-Resten aufgefüllt werden:
+    assert "None" not in r.text
     # Hinweis auf fehlende Pflichtangabe statt ratender Werte:
     assert "Nicht gepflegt" in r.text
 
@@ -203,3 +206,93 @@ def test_platform_templates_and_hints_configurable(auth_client, env, monkeypatch
     r = client.get(f"/watches/{watch_id}/listing?platform=facebook")
     assert r.status_code == 200
     assert "fb" in r.text  # eigene hints.json enthält auch facebook
+
+
+def test_reddit_code_and_telegram_templates_render(auth_client) -> None:
+    watch_id = create_watch(
+        auth_client,
+        specs_text="Factory: Clean Factory\nKaliber: 3861",
+    )
+
+    rc = auth_client.get(f"/watches/{watch_id}/listing?platform=reddit_code")
+    assert rc.status_code == 200
+    # Werks-Code im Titel + Notes-Feld inkl. Werks-Code (Plattform-Vorgabe):
+    assert "Clean Factory" in rc.text
+    assert "Seller Code: 1949" in rc.text
+    assert "Werks-Code Clean Factory" in rc.text
+    _assert_confidential_free(rc.text, context="Reddit-Code")
+
+    tg = auth_client.get(f"/watches/{watch_id}/listing?platform=telegram")
+    assert tg.status_code == 200
+    assert "For Sale:" in tg.text
+    assert "Factory: Clean Factory" in tg.text
+    _assert_confidential_free(tg.text, context="Telegram")
+
+
+def test_box_and_factory_appear_in_listing(auth_client) -> None:
+    watch_id = create_watch(
+        auth_client,
+        specs_text="Factory: Clean Factory",
+        box="box",
+    )
+    r = auth_client.get(f"/watches/{watch_id}/listing?platform=reddit")
+    assert r.status_code == 200
+    assert " - Clean Factory - " in r.text  # Werks-Code im Titelblock
+    assert "Box included" in r.text  # box-Option, nicht geraten
+    assert "Box optional" not in r.text  # ausschließlich die gewählte Option
+
+
+def test_publication_status_tracking(auth_client) -> None:
+    watch_id = create_watch(auth_client)
+    listing_url = f"/watches/{watch_id}/listing?platform=reddit"
+    page = auth_client.get(listing_url)
+    assert "Entwurf" in page.text  # Default-Status
+
+    csrf = csrf_for(auth_client, listing_url)
+    r = post_form(
+        auth_client,
+        f"/watches/{watch_id}/listing/publication",
+        {"platform": "reddit", "status": "ready"},
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    page = auth_client.get(listing_url)
+    assert "Bereit" in page.text
+
+    # "Gepostet" ohne URL ist zulässig (Tracking manuell), mit URL-valid:
+    r = post_form(
+        auth_client,
+        f"/watches/{watch_id}/listing/publication",
+        {"platform": "reddit", "status": "posted"},
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    page = auth_client.get(listing_url)
+    assert "Gepostet" in page.text
+
+    r = post_form(
+        auth_client,
+        f"/watches/{watch_id}/listing/publication",
+        {"platform": "reddit", "status": "posted", "url": "keine-URL"},
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert r.status_code == 400
+    assert "http" in r.text
+
+    r = post_form(
+        auth_client,
+        f"/watches/{watch_id}/listing/publication",
+        {
+            "platform": "reddit",
+            "status": "posted",
+            "url": "https://www.reddit.com/r/Test/comments/x/",
+        },
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    page = auth_client.get(listing_url)
+    assert "https://www.reddit.com/r/Test/comments/x/" in page.text

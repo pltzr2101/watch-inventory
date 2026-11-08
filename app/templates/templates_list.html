@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Vorlagen – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Anzeigenvorlagen</h1>
+</div>
+
+<div class="card">
+  <p>Diese Dateien steuern die erzeugten Reddit-, Reddit-Code-, Facebook- und
+    Telegram-Entwürfe (Titel- und Textvorlage je Plattform sowie die
+    Hinweistexte). Beim Speichern entsteht ein <strong>Override</strong> im
+    Datenordner – die mitgelieferte Vorlage bleibt unverändert und gilt wieder,
+    sobald du den Override löschst.</p>
+  <p class="hint">Dateiordner: <span class="mono">{{ template_dir }}</span> ·
+    Statische Betreiberangaben (Standort, Zahlung, Versandtexte) stehen direkt
+    in den Vorlagen und lassen sich dort anpassen.</p>
+</div>
+
+<section class="card">
+  <h2>Dateien</h2>
+  <ul class="zip-list">
+    {% for row in rows %}
+    <li class="zip-entry">
+      <span class="mono">{{ row.name }}</span>
+      {% if row.source == "override" %}<span class="tag tag-warn">Override</span>
+      {% elif row.source == "builtin" %}<span class="tag">mitgeliefert</span>
+      {% else %}<span class="tag">nicht vorhanden</span>{% endif %}
+      <a class="btn" href="/templates/edit?name={{ row.name }}">Bearbeiten</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<div class="card hint-card">
+  <strong>Hinweis:</strong> Plattformformate sind in Enum und Generator
+  verdrahtet – eine komplett neue Plattform braucht eine Codeänderung
+  (siehe docs/ENTWICKLUNG.md). Über diese Oberfläche änderst du Inhalte der
+  vier vorhandenen Formate und der Hinweistexte.
+</div>
+{% endblock %}

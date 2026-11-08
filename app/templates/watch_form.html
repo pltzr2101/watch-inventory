@@ -75,6 +75,15 @@
     <label for="included_accessories">Lieferumfang</label>
     <textarea id="included_accessories" name="included_accessories" rows="2" placeholder="Box, Papiere, Zubehör …">{{ values.get('included_accessories') or '' }}</textarea>
 
+    <label for="box">Box</label>
+    <select id="box" name="box">
+      <option value="">– nicht angegeben –</option>
+      {% for value, label in box_options.items() %}
+      <option value="{{ value }}" {% if values.get('box_option') == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    {% if errors.get("box") %}<span class="field-error">{{ errors.box }}</span>{% endif %}
+
     <label for="shipping_info">Versandinformationen</label>
     <textarea id="shipping_info" name="shipping_info" rows="2" placeholder="z. B. versicherter Versand innerhalb DE">{{ values.get('shipping_info') or '' }}</textarea>
   </fieldset>

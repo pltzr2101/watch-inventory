@@ -199,3 +199,90 @@ def test_label_used_for_export_name(auth_client) -> None:
     with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
         assert "01-front.jpg" in zf.namelist()
         assert "anzeige-reddit.txt" in zf.namelist()
+
+
+def test_image_classify_orders_and_fills_labels() -> None:
+    from types import SimpleNamespace
+
+    from app.services import image_classify
+
+    images = [
+        SimpleNamespace(original_name="box.jpg", label="", sort_order=1),
+        SimpleNamespace(original_name="dial-macro.jpg", label="", sort_order=0),
+        SimpleNamespace(original_name="unbekannt.jpg", label="custom", sort_order=2),
+    ]
+    image_classify.auto_order(images)
+    # auto_order setzt sort_order (die ORM-Query sortiert danach neu):
+    by_order = sorted(images, key=lambda i: i.sort_order)
+    assert [i.original_name for i in by_order] == ["dial-macro.jpg", "box.jpg", "unbekannt.jpg"]
+    assert [i.sort_order for i in by_order] == [0, 1, 2]
+    # Nur leere Labels werden gefüllt, manuelle Eingaben bleiben:
+    assert by_order[0].label == "dial"
+    assert by_order[1].label == "box"
+    assert by_order[2].label == "custom"
+
+
+def test_auto_order_route_resorts_upload(auth_client) -> None:
+    watch_id = create_watch(auth_client)
+    _upload(
+        auth_client,
+        watch_id,
+        {
+            "files": [
+                ("box.jpg", make_image(color=(1, 1, 1)), "image/jpeg"),
+                ("dial.jpg", make_image(color=(2, 2, 2)), "image/jpeg"),
+            ]
+        },
+    )
+    csrf = csrf_for(auth_client, f"/watches/{watch_id}")
+    r = post_form(
+        auth_client,
+        f"/watches/{watch_id}/images/auto-order",
+        {},
+        csrf=csrf,
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    # Reihenfolge für den Export: Dial vor Box:
+    zip_resp = auth_client.get(f"/watches/{watch_id}/listing/zip?platform=reddit")
+    assert zip_resp.status_code == 200
+    import io
+    import zipfile
+
+    with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as zf:
+        assert "01-dial.jpg" in zf.namelist()
+        assert "02-box.jpg" in zf.namelist()
+
+
+def test_watermark_only_on_export_copies(auth_client, env) -> None:
+    import io
+    import zipfile
+    from pathlib import Path
+
+    watch_id = create_watch(auth_client)
+    original_bytes = make_image(color=(3, 3, 3))
+    _upload(auth_client, watch_id, {"files": ("dial.jpg", original_bytes, "image/jpeg")})
+
+    # Originaldatei unverändert (nicht überschrieben, byte-identisch):
+    images_dir = Path(env) / "images"
+    stored = list(images_dir.iterdir())
+    assert len(stored) == 1
+    assert stored[0].read_bytes() == original_bytes
+
+    plain = auth_client.get(
+        f"/watches/{watch_id}/listing/zip?platform=reddit&watermark=0"
+    )
+    marked = auth_client.get(
+        f"/watches/{watch_id}/listing/zip?platform=reddit"
+        "&watermark=1&watermark_text=TESTMARKER"
+    )
+    assert plain.status_code == 200 and marked.status_code == 200
+
+    def _image_bytes(resp) -> bytes:
+        with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+            name = [n for n in zf.namelist() if n.endswith(".jpg")][0]
+            return zf.read(name)
+
+    assert _image_bytes(plain) != _image_bytes(marked)  # Wasserzeichen wirkt
+    # ... und das gespeicherte Original ist nach beiden Exporten unangetastet:
+    assert stored[0].read_bytes() == original_bytes

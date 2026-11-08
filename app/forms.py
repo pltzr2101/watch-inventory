@@ -7,7 +7,7 @@ import secrets
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .models import Watch, WatchStatus
+from .models import BOX_OPTIONS, Watch, WatchStatus
 from .money import MoneyError, parse_money
 from .services.wecatalog import parse_specs
 
@@ -58,6 +58,12 @@ def parse_watch_form(form) -> tuple[dict, dict[str, str]]:  # type: ignore[no-un
     else:
         values["sku"] = sku_raw or None
 
+    box_raw = str(form.get("box") or "").strip()
+    if box_raw and box_raw not in BOX_OPTIONS:
+        errors["box"] = "Unbekannte Box-Angabe."
+    else:
+        values["box_option"] = box_raw or None
+
     for key in (
         "purchase_price",
         "extra_costs",
@@ -103,6 +109,7 @@ def apply_watch_values(watch: Watch, values: dict) -> None:
     watch.condition = values.get("condition")
     watch.condition_description = values.get("condition_description")
     watch.included_accessories = values.get("included_accessories")
+    watch.box_option = values.get("box_option")
     watch.shipping_info = values.get("shipping_info")
     watch.description = values.get("description")
     watch.extra_costs_note = values.get("extra_costs_note")

@@ -20,13 +20,22 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.staticfiles import StaticFiles
 
 from .config import ConfigError, Settings, load_settings
-from .db import Base, make_engine, make_session_factory
+from .db import Base, ensure_schema, make_engine, make_session_factory
 from .middleware import (
     AuthGateMiddleware,
     LoginRateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
-from .routers import auth, dashboard, images, imports, listings, watches
+from .routers import (
+    auth,
+    dashboard,
+    dump,
+    images,
+    imports,
+    listings,
+    templates_admin,
+    watches,
+)
 from .templating import render
 
 logger = logging.getLogger("watch-inventory")
@@ -58,6 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     engine = make_engine(settings.database_path)
     Base.metadata.create_all(engine)
+    ensure_schema(engine)
 
     app = FastAPI(
         title="Watch-Inventory (intern)",
@@ -93,6 +103,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(watches.router)
     app.include_router(images.router)
     app.include_router(listings.router)
+    app.include_router(templates_admin.router)
+    app.include_router(dump.router)
     app.include_router(imports.router)
 
     static_dir = Path(__file__).resolve().parent / "static"

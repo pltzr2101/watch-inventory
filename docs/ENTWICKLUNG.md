@@ -84,9 +84,85 @@ Registry-Zugangsdaten (GHCR-Token) liegen als CI-Secret, niemals im Repo.
 
 ## Anzeigen-Vorlagen anpassen
 
-Plattform-Vorlagen: `app/listing_templates/` (`reddit.txt.j2`,
-`facebook.txt.j2`) inkl. Hinweisen/Plattform-Notizen. Alternativ per
-`LISTING_TEMPLATE_DIR` einen externen Ordner angeben (siehe `.env.example`) –
-dann müssen die Dateien dort vollständig bereitstehen. Vorlagen dürfen keine
-vertraulichen Kontextschlüssel ausgeben; der Generator filtert diese
-zusätzlich ab (Defense in Depth), Tests sichern das.
+Vier Plattformformate, je aus Text- und Titelvorlage plus Hinweistexten:
+
+| Format | Textvorlage | Titelvorlage |
+| --- | --- | --- |
+| Reddit (r/Reptime, WatchExchange …) | `reddit.txt.j2` | `reddit.title.txt.j2` |
+| Reddit – Code-/Werks-Code-Format | `reddit_code.txt.j2` | `reddit_code.title.txt.j2` |
+| Facebook (DE/EN/China/Vietnam-Gruppen) | `facebook.txt.j2` | `facebook.title.txt.j2` |
+| Telegram | `telegram.txt.j2` | `telegram.title.txt.j2` |
+
+Zusätzlich `hints.json` (Plattform-Hinweistexte, Default aus
+`PLATFORM_HINTS`).
+
+**Verwaltung in der App:** `Vorlagen` in der Navigation – Liste, Editor,
+Vorschau mit Beispielkontext, Speichern als **Override** und Löschen
+(stellt die mitgelieferte Vorlage wieder her). Die Whitelist erlaubt nur
+diese Dateinamen (kein Pfadzugriff). Jede Vorlage wird vor dem Speichern
+syntaktisch geprüft und mit `StrictUndefined` gegen einen Beispielkontext
+gerendert – Tippfehler in Variablen fallen sofort auf. Alle Aktionen sind
+authentifiziert und CSRF-geschützt.
+
+**Speicherorte:** Override-Dateien liegen in `LISTING_TEMPLATE_DIR`
+(Datenordner/Volume), mitgelieferte Dateien unter `app/listing_templates/`
+(gelten als Fallback; ein externer Ordner muss alle Dateien selbst
+bereitstellen).
+
+**Statische Muster in den Vorlagen (Standort/PLZ, Zahlung, Versand,
+„Seller Code: 1949“, „Box optional (+50 €)“, „GELIEFERT AUS CHINA“):**
+Diese Zeilen sind Teil der Vorlagen selbst und lassen sich dort direkt
+anpassen. **Vor dem ersten produktiven Einsatz gegen die eigenen
+Originalmuster abgleichen** – nicht alle Zeilen sind aus einer geprüften
+Quelle im Projekt dokumentiert (nachvollziehbar sind: Reddit-Seller-Code
+1949 aus den Produktvorgaben, „Box optional (+50 €)“ aus dem
+Setup-Bestand von `BOX_OPTIONS`).
+
+**Titellogik:** Plattformspezifisch im Generator
+(`listing_generator.generate_title`) – u. a. Werks-Code
+(`specs`-Schlüssel „factory“) im Reddit-Titel, Seller-Code im
+Reddit-Code-Format, deutsche Vorzeichen bei Facebook.
+
+**Neue Plattform hinzufügen** (Codeänderung, bewusst nicht UI):
+`ListingPlatform`-Enum, `PLATFORM_LABELS`, `PLATFORM_HINTS`
+(`listing_generator`), Titel-/Textvariante in `generate_title()` bzw. den
+Vorlagendateien, Plausibilitätsregel in `parse_watch_form()` sowie
+`TEMPLATE_CONTEXT_KEYS` unverändert prüfen (Whitelist schützt vor
+vertraulichen Kontextdaten – Defense in Depth, durch Tests abgesichert).
+
+## Pump&Dump (Schnellanlage)
+
+`+ Dump` → ein Formular (Pflicht: nur Titel; optional Factory, Movement,
+Zustand, Box, Verkaufspreis, Status, Beschreibung, Fotos) → sofort
+Review-Seite: Anzeigentext für alle vier Plattformen ansehen/speichern,
+Bilder auto-sortieren, Status „Bereit/Gepostet“ pflegen, ZIP exportieren.
+Fotos werden **vor** dem Anlegen des Datensatzes vollständig geprüft
+(echter Typ, Größe, Pixelmaße); bei Speicherproblemen werden abgelegte
+Dateien wieder entfernt. Nicht gepflegte Felder erscheinen als
+„nicht gepflegt“ – es wird nie geraten.
+
+## Bildrollen & automatische Reihenfolge
+
+`app/services/image_classify.py` ordnet über Filename-Keywords
+(DE/EN) Rollen zu (dial → front → case → side → back → clasp → bracelet →
+papers → box → wrist) und füllt ausschließlich **leere** Labels;
+manuelle Labels und Pfeil-Sortierung haben immer Vorrang. Auswirkung:
+Exportdateien `01-…`, `02-…` in dieser Reihenfolge (Button
+„Reihenfolge automatisch optimieren“ auf Dump-Review und Uhrenseite).
+
+## Wasserzeichen (optional, standardmäßig aus)
+
+`WATERMARK_ENABLED=0` (Default) / `WATERMARK_TEXT` (Pflicht bei aktiv);
+zusätzlich pro Export per Checkbox mit eigenem Text überschreibbar.
+Wasserzeichen werden ausschließlich auf **Exportkopien** im ZIP
+aufgebracht, nie auf gespeicherte Originale. Kein Fremdlogo, keine
+KI-Retusche; Katalogbilder bleiben bei deaktivierter
+`WEBCATALOG_ALLOW_IMAGE_EDIT` unverändert.
+
+## Veröffentlichungs-Tracking (kein Auto-Post)
+
+`Publication` je Uhr und Plattform: Status `draft → ready → posted`
+(optional mit Beitrag-URL, http(s)-validiert, `posted_at`-Zeitstempel für
+spätere Analysen). Bedienung auf Listing-/Dump-Review-Seite. Die App
+veröffentlicht niemals automatisch – Text und Bilder werden kopiert bzw.
+heruntergeladen und manuell eingefügt.
