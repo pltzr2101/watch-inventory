@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Vorlage {{ tpl_name }} – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Vorlage: <span class="mono">{{ tpl_name }}</span></h1>
+  <a class="btn" href="/templates">Zur Liste</a>
+</div>
+
+<p>
+  {% if source == "override" %}<span class="tag tag-warn">Override (Datenordner)</span>
+  {% elif source == "builtin" %}<span class="tag">mitgelieferte Vorlage</span>
+  {% else %}<span class="tag">nicht vorhanden</span>{% endif %}
+</p>
+
+{% if errors.get("content") %}
+<div class="flash flash-error">{{ errors.content }}</div>
+{% endif %}
+
+<form method="post" action="/templates/save" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="name" value="{{ tpl_name }}">
+
+  <label for="tpl-content">Quelltext</label>
+  <textarea id="tpl-content" name="content" rows="24" spellcheck="false" style="font-family:monospace">{{ content }}</textarea>
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Speichern (Override anlegen/überschreiben)</button>
+    <button class="btn" type="submit" formaction="/templates/preview">Vorschau rendern</button>
+    <a class="btn" href="/templates">Abbrechen</a>
+  </div>
+</form>
+
+{% if source == "override" %}
+<form method="post" action="/templates/delete" class="form-actions">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="name" value="{{ tpl_name }}">
+  <button class="btn" type="submit">Override löschen (mitgelieferte Vorlage wiederherstellen)</button>
+</form>
+{% endif %}
+
+{% if preview_output is not none %}
+<section class="card">
+  <h2>Vorschau mit Beispieldaten</h2>
+  <textarea id="preview-output" rows="16" readonly style="width:100%;font-family:monospace">{{ preview_output }}</textarea>
+  <div class="form-actions">
+    <button class="btn" type="button" data-copy-target="preview-output">In Zwischenablage kopieren</button>
+  </div>
+  <p class="hint">Beispielwerte, keine echten Bestandsdaten. Fehlt eine Variable,
+    bricht die Vorschau hier bereits mit einer Fehlermeldung ab.</p>
+</section>
+{% endif %}
+
+{% if not is_hints %}
+<section class="card">
+  <h2>Verfügbare Variablen</h2>
+  <p class="mono">{{ available_keys | join(", ") }}</p>
+  <p class="hint">Bedingt (nur wenn gepflegt): condition, condition_description,
+    accessories, shipping_info, description, factory, movement, box (none/box/optional),
+    price. Technische Daten als <code>{% raw %}{% for spec in specs %}…{% endfor %}{% endraw %}</code>
+    mit <code>spec.key</code>/<code>spec.value</code>.</p>
+</section>
+{% endif %}
+{% endblock %}

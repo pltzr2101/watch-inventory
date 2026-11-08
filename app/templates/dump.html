@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Pump&amp;Dump – Watch-Inventory{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Pump&amp;Dump: neue Uhr</h1>
+  <a class="btn" href="/watches/new">Ausführliches Formular</a>
+</div>
+
+{% if errors %}
+<div class="flash flash-error">Bitte die markierten Eingaben prüfen.</div>
+{% endif %}
+
+<form method="post" action="/dump" enctype="multipart/form-data" class="form-grid">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <label for="d-title">Titel (Marke/Modell) *</label>
+  <input id="d-title" name="title" maxlength="200" required
+         placeholder="z. B. Clean Factory Submariner 126610LN" value="{{ values.get('title') or '' }}">
+  {% if errors.get("title") %}<span class="field-error">{{ errors.title }}</span>{% endif %}
+
+  <label for="d-brand">Marke</label>
+  <input id="d-brand" name="brand" maxlength="120" value="{{ values.get('brand') or '' }}">
+  {% if errors.get("brand") %}<span class="field-error">{{ errors.brand }}</span>{% endif %}
+
+  <label for="d-model">Modell</label>
+  <input id="d-model" name="model" maxlength="160" value="{{ values.get('model') or '' }}">
+  {% if errors.get("model") %}<span class="field-error">{{ errors.model }}</span>{% endif %}
+
+  <label for="d-factory">Factory</label>
+  <input id="d-factory" name="factory" maxlength="80" placeholder="z. B. Clean Factory"
+         value="{{ values.get('factory') or '' }}">
+  {% if errors.get("factory") %}<span class="field-error">{{ errors.factory }}</span>{% endif %}
+
+  <label for="d-movement">Werk / Movement</label>
+  <input id="d-movement" name="movement" maxlength="80" placeholder="z. B. VS352"
+         value="{{ values.get('movement') or '' }}">
+  {% if errors.get("movement") %}<span class="field-error">{{ errors.movement }}</span>{% endif %}
+
+  <label for="d-condition">Zustand (kurz)</label>
+  <input id="d-condition" name="condition" list="condition-suggestions" maxlength="80"
+         value="{{ values.get('condition') or '' }}">
+  <datalist id="condition-suggestions">
+    {% for c in conditions %}<option value="{{ c }}"></option>{% endfor %}
+  </datalist>
+  {% if errors.get("condition") %}<span class="field-error">{{ errors.condition }}</span>{% endif %}
+
+  <label for="d-box">Box</label>
+  <select id="d-box" name="box">
+    <option value="">– nicht angegeben –</option>
+    {% for value, label in box_options.items() %}
+    <option value="{{ value }}" {% if values.get('box') == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if errors.get("box") %}<span class="field-error">{{ errors.box }}</span>{% endif %}
+
+  <label for="d-price">Verkaufspreis (€)</label>
+  <input id="d-price" name="price" inputmode="decimal" placeholder="z. B. 1250,00"
+         value="{{ values.get('price') or '' }}">
+  {% if errors.get("price") %}<span class="field-error">{{ errors.price }}</span>{% endif %}
+
+  <label for="d-status">Bestandsstatus</label>
+  <select id="d-status" name="status">
+    {% for s in statuses %}
+    <option value="{{ s.value }}" {% if values.get('status', 'in_germany') == s.value %}selected{% endif %}>{{ s.label }}</option>
+    {% endfor %}
+  </select>
+
+  <label for="d-desc">Kurzbeschreibung</label>
+  <textarea id="d-desc" name="description" rows="4">{{ values.get('description') or '' }}</textarea>
+  {% if errors.get("description") %}<span class="field-error">{{ errors.description }}</span>{% endif %}
+
+  <label for="d-files">Fotos (Mehrfachauswahl möglich)</label>
+  <input id="d-files" type="file" name="files" multiple accept="image/jpeg,image/png,image/webp">
+  {% if errors.get("files") %}<span class="field-error">{{ errors.files }}</span>{% endif %}
+
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Anlegen &amp; Review öffnen</button>
+    <a class="btn" href="/watches">Abbrechen</a>
+  </div>
+  <p class="hint">Pflicht ist nur der Titel – alles Weitere kannst du im Review und später
+    ergänzen. Nicht gepflegte Felder werden <strong>nicht geraten</strong>, sondern als
+    fehlend angezeigt. Fotos werden serverseitig geprüft und automatisch vorsortiert.</p>
+</form>
+{% endblock %}

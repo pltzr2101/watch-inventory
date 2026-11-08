@@ -10,6 +10,7 @@ from ..deps import DbDep, SettingsDep, load_watch
 from ..flash import flash
 from ..forms import apply_watch_values, gen_sku, parse_watch_form
 from ..models import (
+    BOX_OPTIONS,
     StatusEvent,
     Watch,
     WatchStatus,
@@ -76,6 +77,7 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
             "condition": watch.condition or "",
             "condition_description": watch.condition_description or "",
             "included_accessories": watch.included_accessories or "",
+            "box_option": watch.box_option or "",
             "shipping_info": watch.shipping_info or "",
             "description": watch.description or "",
             "specs_text": specs_as_text(watch.specs),
@@ -86,6 +88,7 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
         "values": values or {},
         "errors": errors or {},
         "statuses": list(WatchStatus),
+        "box_options": BOX_OPTIONS,
         "watch": watch,
     }
 

@@ -78,7 +78,29 @@ class ImageSource(StrEnum):
 
 class ListingPlatform(StrEnum):
     REDDIT = "reddit"
+    REDDIT_CODE = "reddit_code"
     FACEBOOK = "facebook"
+    TELEGRAM = "telegram"
+
+
+class PublicationStatus(StrEnum):
+    """Veröffentlichungs-Status je Uhr × Plattform (Skelett für späteres Posten)."""
+
+    DRAFT = "draft"
+    READY = "ready"
+    POSTED = "posted"
+
+    @property
+    def label(self) -> str:
+        return {"draft": "Entwurf", "ready": "Bereit", "posted": "Gepostet"}[self.value]
+
+
+# Box-Option (Lieferumfang-Teil): None = nicht angegeben (keine Aussage!).
+BOX_OPTIONS: dict[str, str] = {
+    "none": "Ohne Box",
+    "box": "Box inklusive",
+    "optional": "Box optional (+50 €)",
+}
 
 
 def _sa_enum(enum_cls: type[enum.Enum], name: str):  # type: ignore[no-untyped-def]
@@ -135,9 +157,18 @@ class Watch(Base):
     condition: Mapped[str | None] = mapped_column(String(80))
     condition_description: Mapped[str | None] = mapped_column(Text)
     included_accessories: Mapped[str | None] = mapped_column(Text)
+    # none | box | optional – NULL = nicht angegeben (wird nie geraten).
+    box_option: Mapped[str | None] = mapped_column(String(16))
     shipping_info: Mapped[str | None] = mapped_column(Text)
     description: Mapped[str | None] = mapped_column(Text)
     specs: Mapped[list] = mapped_column(JSON, default=list)
+
+    @property
+    def box_label(self) -> str:
+        """Deutsche Box-Angabe für die Detailansicht („—" wenn nicht angegeben)."""
+        if not self.box_option:
+            return "—"
+        return BOX_OPTIONS.get(self.box_option, "—")
 
     # Importierte Quelldaten (Wecatalog.cn) – getrennt von eigenen Inhalten:
     provenance: Mapped[Provenance] = mapped_column(
@@ -169,6 +200,10 @@ class Watch(Base):
         cascade="all, delete-orphan",
         order_by="StatusEvent.changed_at",
     )
+    publications: Mapped[list[Publication]] = relationship(
+        back_populates="watch", cascade="all, delete-orphan"
+    )
+
     listing_drafts: Mapped[list[ListingDraft]] = relationship(
         back_populates="watch", cascade="all, delete-orphan"
     )
@@ -232,6 +267,33 @@ class ListingDraft(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     watch: Mapped[Watch] = relationship(back_populates="listing_drafts")
+
+
+class Publication(Base):
+    """Veröffentlichungs-Status je Uhr × Plattform (Grundgerüst: kein Auto-Posten).
+
+    `posted_at`/`url` dokumentieren spätere Veröffentlichungen und bilden die
+    Basis für spätere Verkaufs-/Kanal-Auswertungen; das eigentliche Posten
+    erfolgt weiterhin manuell (Kanal-Automation ist bewusst offen/Später-Stufe).
+    """
+
+    __tablename__ = "publications"
+    __table_args__ = (UniqueConstraint("watch_id", "platform", name="uq_publication"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watch_id: Mapped[str] = mapped_column(
+        ForeignKey("watches.id", ondelete="CASCADE"), index=True
+    )
+    platform: Mapped[ListingPlatform] = mapped_column(
+        _sa_enum(ListingPlatform, "listing_platform")
+    )
+    status: Mapped[str] = mapped_column(String(16), default=PublicationStatus.DRAFT.value)
+    posted_at: Mapped[datetime | None] = mapped_column(DateTime)
+    url: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    watch: Mapped[Watch] = relationship(back_populates="publications")
 
 
 class ImportPreview(Base):

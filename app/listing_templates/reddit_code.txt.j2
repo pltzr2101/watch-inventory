@@ -1,0 +1,24 @@
+For Sale: {{ title }}{% if condition %} - {{ condition }}{% endif %}
+
+{% if factory %}Factory: {{ factory }}
+{% endif %}{% if movement %}Movement: {{ movement }}
+{% endif %}{% if condition or box %}Condition: {{ condition }}{% if box == "box" %}{% if condition %}, {% endif %}Box included{% elif box == "none" %}{% if condition %}, {% endif %}no box{% elif box == "optional" %}{% if condition %}, {% endif %}Box optional (+50 €){% endif %}
+{% endif %}Location: Germany (Post code 55xxx, RLP)
+
+Payment: PayPal F&F, Cash if Pickup in Person
+
+Shipping: FREE tracked DHL within Germany & 15 EUR tracked DHL within the EU Only.
+1–2 days after payment
+
+{% if price %}Price: {{ price }}
+✅ Seller Code: 1949
+{% endif %}{% if condition_description %}
+Condition details: {{ condition_description }}
+
+{% endif %}{% if accessories %}
+Box/Accessories: {{ accessories }}
+{% endif %}{% if description or factory %}
+Notes: {{ description }}{% if factory %}{% if description %} · {% endif %}Werks-Code {{ factory }}{% endif %}
+{% endif %}{% if shipping_info %}
+{{ shipping_info }}
+{% endif %}

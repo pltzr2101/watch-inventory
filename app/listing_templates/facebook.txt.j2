@@ -1,25 +1,24 @@
-{{ title }}
+Verkaufe: {{ title }}{% if condition %} - {{ condition }}{% endif %}
 
-{% if brand %}{{ brand }}{% if model %} {{ model }}{% endif %}
+{% if factory %}Factory: {{ factory }}
+{% endif %}{% if movement %}Werk: {{ movement }}
+{% endif %}{% if condition or box %}Zustand: {{ condition }}{% if box == "box" %}{% if condition %}, {% endif %}Box inklusive{% elif box == "none" %}{% if condition %}, {% endif %}Ohne Box{% elif box == "optional" %}{% if condition %}, {% endif %}Box optional (+50 €){% endif %}
+{% endif %}Standort: Deutschland (PLZ 55xxx, Rheinland-Pfalz)
 
-{% endif %}{% if condition %}Zustand: {{ condition }}
-{% endif %}{% if price %}Preis: {{ price }}
-{% endif %}
-{% if accessories %}Lieferumfang: {{ accessories }}
-{% endif %}
-{% if shipping_info %}Versand: {{ shipping_info }}
-{% endif %}
+Zahlung: PayPal Freunde & Familie, Bar bei Übergabe
 
-{% if condition_description %}
-Zustand im Detail:
-{{ condition_description }}
-{% endif %}
-{% if specs %}
-Technische Daten:
-{% for spec in specs %}- {{ spec.key }}: {{ spec.value }}
-{% endfor %}
-{% endif %}
-{% if description %}
+Versand: Kostenloser versicherter DHL-Versand innerhalb Deutschlands & 15 € versicherter DHL-Versand in die EU.
+1–2 Tage nach Zahlungseingang
+GELIEFERT AUS CHINA
+
+{% if price %}Preis: {{ price }}
+{% endif %}{% if condition_description %}
+Zustand im Detail: {{ condition_description }}
+
+{% endif %}{% if accessories %}
+Lieferumfang: {{ accessories }}
+{% endif %}{% if description %}
 {{ description }}
+{% endif %}{% if shipping_info %}
+{{ shipping_info }}
 {% endif %}
-Nachrichten gern per DM.

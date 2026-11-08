@@ -85,6 +85,12 @@ class Settings:
     # Standard false: Katalogbilder werden unverändert behandelt, solange der
     # Erlaubnisumfang für Bearbeitungen nicht eindeutig geklärt ist.
     wecatalog_allow_image_edit: bool = False
+    # Export-Ausgabe (nur ZIP/Exportkopien, Originale bleiben unangetastet):
+    export_max_edge: int = 2000  # lange Kante in px; 0 = nicht verkleinern
+    export_quality: int = 85  # JPEG-/WEBP-Qualität beim Export
+    # Wasserzeichen: standardmäßig AUS; Text pro Export in der UI überschreibbar.
+    watermark_enabled: bool = False
+    watermark_text: str = ""
     listing_template_dir: Path | None = None
     extra: dict = field(default_factory=dict)
 
@@ -116,9 +122,16 @@ def load_settings() -> Settings:
         )
 
     template_dir_raw = _opt_env("LISTING_TEMPLATE_DIR")
-    listing_template_dir = Path(template_dir_raw) if template_dir_raw else None
+    if template_dir_raw:
+        listing_template_dir = Path(template_dir_raw).expanduser().resolve()
+    else:
+        # Persistente Vorlagenordner in den Daten (Volume) – Upload/Editor-UI
+        # schreibt dorthin; Built-ins bleiben Fallback (ChoiceLoader).
+        listing_template_dir = None  # wird nach data_dir unten ergänzt
 
     data_dir = Path(_opt_env("DATA_DIR", "./data")).expanduser().resolve()
+    if listing_template_dir is None:
+        listing_template_dir = data_dir / "listing_templates"
 
     return Settings(
         data_dir=data_dir,
@@ -141,5 +154,9 @@ def load_settings() -> Settings:
             "WECATALOG_MAX_FETCHES_PER_HOUR", 6, 1, 1000
         ),
         wecatalog_allow_image_edit=_bool_env("WECATALOG_ALLOW_IMAGE_EDIT", False),
+        export_max_edge=_int_env("EXPORT_MAX_EDGE", 2000, 0, 8000),
+        export_quality=_int_env("EXPORT_QUALITY", 85, 60, 95),
+        watermark_enabled=_bool_env("WATERMARK_ENABLED", False),
+        watermark_text=_opt_env("WATERMARK_TEXT")[:80],
         listing_template_dir=listing_template_dir,
     )

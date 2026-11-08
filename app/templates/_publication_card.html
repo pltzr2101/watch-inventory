@@ -1,0 +1,36 @@
+<section class="card">
+  <h2>Veröffentlichung – {{ platform_labels[platform] }}</h2>
+  <p>Status:
+    {% if pub_status == "posted" %}<span class="tag tag-ok">Gepostet</span>
+    {% elif pub_status == "ready" %}<span class="tag tag-warn">Bereit</span>
+    {% else %}<span class="tag">Entwurf</span>{% endif %}
+    {% if pub_posted_at %}<span class="muted">– gepostet am {{ fmt_dt(pub_posted_at) }}</span>{% endif %}
+    {% if pub_url %}<a href="{{ pub_url }}" rel="noopener noreferrer">Link zum Beitrag</a>{% endif %}
+  </p>
+  <div class="form-actions">
+    <form method="post" action="/watches/{{ watch.id }}/listing/publication">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="platform" value="{{ platform.value }}">
+      <input type="hidden" name="next" value="{{ next_value }}">
+      <input type="hidden" name="status" value="ready">
+      <button class="btn" type="submit" {% if pub_status == "ready" %}disabled{% endif %}>Als bereit markieren</button>
+    </form>
+    <form method="post" action="/watches/{{ watch.id }}/listing/publication">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="platform" value="{{ platform.value }}">
+      <input type="hidden" name="next" value="{{ next_value }}">
+      <input type="hidden" name="status" value="posted">
+      <input name="url" maxlength="500" placeholder="URL des Beitrags (optional)" value="{{ pub_url or '' }}">
+      <button class="btn" type="submit">Als gepostet markieren</button>
+    </form>
+    <form method="post" action="/watches/{{ watch.id }}/listing/publication">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="platform" value="{{ platform.value }}">
+      <input type="hidden" name="next" value="{{ next_value }}">
+      <input type="hidden" name="status" value="draft">
+      <button class="btn" type="submit" {% if pub_status == "draft" %}disabled{% endif %}>Zurück auf Entwurf</button>
+    </form>
+  </div>
+  <p class="hint">Nur Tracking für dich: die App postet nichts automatisch – Status und
+    URL helfen bei der späteren Auswertung der Verkaufskanäle.</p>
+</section>

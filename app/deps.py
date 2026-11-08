@@ -12,6 +12,14 @@ from .models import Watch
 WATCH_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
+def safe_next(raw, default: str) -> str:
+    """Sicherer interner Redirect-Parameter (nur lokale Pfade)."""
+    value = str(raw or "").strip()
+    if value.startswith("/") and not value.startswith("//") and "\\" not in value:
+        return value
+    return default
+
+
 def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 

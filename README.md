@@ -13,6 +13,31 @@ Nicht enthalten (bewusst, siehe `docs/spaete-ausbaustufen.md`): öffentliche
 Bestandsseite, öffentliche APIs, Analytics-Dashboards, Shop-/Checkout-Funktionen,
 automatisierte Veröffentlichung auf Plattformen.
 
+## Features (aktueller Stand)
+
+- **Bestandsverwaltung:** Uhren anlegen/bearbeiten/löschen, fünf
+  Bestandsstatus (Bestand in DE, Bestand in China, Unterwegs, Reserviert,
+  Verkauft) mit Statushistorie, Volltextsuche, Geldbeträge als Cents,
+  Statushistorie, Upload-Fotoverwaltung.
+- **Box-Option** (`box_option`: Ohne Box / Box inklusive / Box optional),
+  Pflichtfelder werden nie geraten – leere Angaben erscheinen als
+  „nicht gepflegt“.
+- **Pump&Dump:** Einbildschirm-Anlage (Grunddaten + Fotos) mit direkt
+  anschließender Review-Seite für Text, Bilder, Export und Tracking.
+- **Anzeigengenerator:** vier Plattformformate (Reddit, Reddit-Code,
+  Facebook, Telegram) mit eigenen Text- und Titelvorlagen, editierbaren
+  Entwürfen, Kopieren, TXT-/Markdown-Export, ZIP-Export inklusive
+  passendem Anzeigentext, optionalem Wasserzeichen.
+- **Vorlagenverwaltung** unter `/templates`: Editor, Vorschau, Validierung,
+  Override-Roundtrip gegen die mitgelieferten Vorlagen.
+- **Veröffentlichungs-Tracking:** Status Draft/Bereit/Gepostet je
+  Plattform (manuell, kein Auto-Posten).
+- **Wecatalog.cn-Import:** standardmäßig deaktiviertes Feature-Flag
+  (siehe unten).
+- **Nicht enthalten (bewusst):** öffentliche Bestandsseite, Analytics,
+  Shop-/Checkout-Funktionen – Vorbereitungen dazu in
+  `docs/spaete-ausbaustufen.md`.
+
 ## Schnellstart (lokal)
 
 ```bash

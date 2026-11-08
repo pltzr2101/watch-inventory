@@ -32,3 +32,13 @@ def make_engine(db_path: Path) -> Engine:
 
 def make_session_factory(engine: Engine) -> sessionmaker:
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+
+def ensure_schema(engine: Engine) -> None:
+    """Idempotentes Nachrüsten fehlender Spalten (create_all legt nur neue an)."""
+    from sqlalchemy import inspect, text
+
+    columns = {c["name"] for c in inspect(engine).get_columns("watches")}
+    if "box_option" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE watches ADD COLUMN box_option VARCHAR(16)"))

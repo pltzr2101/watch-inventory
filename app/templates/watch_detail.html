@@ -69,6 +69,7 @@
       <dt>Zustand</dt><dd>{{ watch.condition or "—" }}</dd>
       <dt>Zustand im Detail</dt><dd class="pre">{{ watch.condition_description or "—" }}</dd>
       <dt>Lieferumfang</dt><dd class="pre">{{ watch.included_accessories or "—" }}</dd>
+      <dt>Box</dt><dd>{{ watch.box_label }}</dd>
       <dt>Versand</dt><dd class="pre">{{ watch.shipping_info or "—" }}</dd>
       <dt>Status seit</dt><dd>{{ fmt_dt(watch.status_changed_at) }}</dd>
     </dl>

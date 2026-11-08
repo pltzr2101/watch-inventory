@@ -16,6 +16,11 @@
   wiederverwendet werden.
 - Statusstruktur (`in_china` vs. `in_germany` etc.) erlaubt die geforderte
   Trennung „In Deutschland" / „In China" über Filter auf demselben Feld.
+- `box_option` (`none`/`box`/`optional`, NULL = nicht angegeben) steht als
+  fachlich öffentlich darstellbares Feld zur Verfügung; die
+  Anzeigengenerator-Vorlagen nutzen es bereits intern, eine öffentliche
+  Whitelist kann es später 1:1 übernehmen („Box optional (+50 €)“ ist das
+  statische Label aus dem Setup-Bestand).
 - Import-Kennzeichnung (`provenance`, `source_fields`, `source_content`,
   `import_confirmed_at`, `ImageSource.WECATALOG`): öffentlich ausgeliefert
   werden nur Felder/Bilder, die *sowohl* `public_approved` *als auch*

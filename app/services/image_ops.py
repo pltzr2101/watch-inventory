@@ -103,6 +103,80 @@ def export_filename(index: int, label: str | None, ext: str) -> str:
     return f"{index:02d}-{safe_label}{ext}"
 
 
+def optimize_for_export(data: bytes, *, max_edge: int, quality: int) -> bytes:
+    """Verkleinert/normalisiert EXPORT-KOPIEN. Das Original bleibt unangetastet.
+
+    - lange Kante > max_edge → verkleinern (LANCZOS)
+    - JPEG/WEBP mit neuem `quality`; PNG verlustfrei neu speichern
+    - bei bereits passender Größe und PNG/WEBP ohne Skalierung: Originalbytes
+    """
+    import io as _io
+
+    from PIL import Image, ImageOps
+
+    with Image.open(_io.BytesIO(data)) as opened:
+        # exif_transpose liefert Image.Image (nicht ImageFile) → eigene Variable.
+        img: Image.Image = ImageOps.exif_transpose(opened)
+        fmt = (img.format or "JPEG").upper()
+        needs_resize = max_edge > 0 and max(img.size) > max_edge
+        if needs_resize:
+            img.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
+        if not needs_resize and fmt in {"PNG", "WEBP"}:
+            return data
+        out = _io.BytesIO()
+        if fmt == "PNG":
+            img.save(out, format="PNG", optimize=True)
+        elif fmt == "WEBP":
+            img.save(out, format="WEBP", quality=quality)
+        else:
+            if img.mode not in {"RGB", "L"}:
+                img = img.convert("RGB")
+            img.save(out, format="JPEG", quality=quality, optimize=True)
+        return out.getvalue()
+
+
+def apply_watermark(data: bytes, text: str) -> bytes:
+    """Halbtransparenter Text unten rechts – nur auf Exportkopien, kein Logo."""
+    text = str(text or "").strip()[:80]
+    if not text:
+        return data
+    import io as _io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    with Image.open(_io.BytesIO(data)) as img:
+        fmt = (img.format or "JPEG").upper()
+        base = img.convert("RGBA")
+        width, height = base.size
+        font_size = max(14, width // 34)
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", font_size)
+        except OSError:
+            font = ImageFont.load_default(size=font_size)
+        draw = ImageDraw.Draw(base, "RGBA")
+        margin = max(8, width // 50)
+        bbox = draw.textbbox((0, 0), text, font=font, stroke_width=1)
+        text_w, text_h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        position = (width - text_w - margin, height - text_h - margin)
+        draw.text(
+            position,
+            text,
+            font=font,
+            fill=(255, 255, 255, 140),
+            stroke_width=1,
+            stroke_fill=(0, 0, 0, 90),
+        )
+        out = _io.BytesIO()
+        if fmt == "PNG":
+            base.save(out, format="PNG", optimize=True)
+        elif fmt == "WEBP":
+            base.save(out, format="WEBP", quality=90)
+        else:
+            base.convert("RGB").save(out, format="JPEG", quality=90, optimize=True)
+        return out.getvalue()
+
+
 def sanitize_adjustments(raw: dict | None) -> dict | None:
     """Validiert und normalisiert Korrekturparameter (Werte begrenzen)."""
     if not raw:
