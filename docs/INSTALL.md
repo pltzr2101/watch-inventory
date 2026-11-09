@@ -125,6 +125,25 @@ der Tag bleibt konfigurierbar für reproduzierbare Stände und Rollbacks.
 - Die App kennt bewusst **keine** öffentlichen Routen: Alle Seiten, Uploads,
   Bildzugriffe und Exporte sind authentifiziert.
 
+### Passwort-Manager (Google, Proton, iCloud-Schlüsselbund)
+
+Das Login-Formular ist für Manager ausgelegt (`form` + `type="password"` +
+`autocomplete="current-password"`), aber Speicherung und Erkennung hängen an
+einer **sicheren Origin**: Über reinem `http://` (z. B. `192.168.x.x:3080`)
+speichern iOS-Schlüsselbund und die gängigen Manager keine Zugangsdaten –
+das Login wird dort schlicht nicht als solches angeboten. Vorgehen:
+
+1. **HTTPS davor schalten**, z. B. mit Caddy auf dem LXC-Host (Port `3080`
+   ist bereits für localhost erreichbar):
+   `caddy reverse-proxy --from watch.example.de --to 127.0.0.1:3080`
+   – Caddy holt automatisch ein Let's-Encrypt-Zertifikat (DNS-Eintrag muss
+   auf den Host zeigen).
+2. In den Stack-Variablen **`COOKIE_SECURE=true`** setzen (Session-Cookie
+   wird dann nur noch über HTTPS mitgeführt).
+3. Ohne öffentlichen DNS z. B. **Tailscale** (`.ts.net`-Domain inkl.
+   Zertifikat) oder eine interne CA verwenden; ohne TLS bleiben
+   Passwort-Manager-Integrationen eingeschränkt.
+
 ## Persistenz
 
 Siehe `docs/BACKUP.md`. Kurzfassung: Das Volume `watch-inventory-data`

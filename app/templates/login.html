@@ -5,12 +5,16 @@
   <h1>Anmelden</h1>
   <p class="muted">Interner Bestand – nur für den Betreiber.</p>
   {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
-  <form method="post" action="/login">
+  <form method="post" action="/login" autocomplete="on">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="next_to" value="{{ next_to }}">
     <label for="password">Passwort</label>
-    <input type="password" id="password" name="password" autocomplete="current-password" required autofocus>
-    <button type="submit" class="btn btn-primary">Anmelden</button>
+    <input type="password" id="password" name="password" autocomplete="current-password"
+           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"
+           required autofocus>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Anmelden</button>
+    </div>
   </form>
 </div>
 {% endblock %}
