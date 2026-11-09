@@ -9,6 +9,8 @@
     </h1>
     <p class="muted mono">{{ watch.sku }}
       {% if watch.brand %} · {{ watch.brand }}{% endif %}
+      {% if watch.factory %} · {{ watch.factory }}{% endif %}
+      {% if watch.version %} ({{ watch.version }}){% endif %}
       {% if watch.model %} {{ watch.model }}{% endif %}
       · angelegt {{ fmt_dt(watch.created_at) }} · geändert {{ fmt_dt(watch.updated_at) }}
     </p>
@@ -53,11 +55,38 @@
   <section class="card">
     <h2>Vertrauliche Einkaufsdaten</h2>
     <dl class="dl">
+      {% if watch.purchase_price_usd_cents is not none %}
+      <dt>Einkauf</dt>
+      <dd>{{ format_money(watch.purchase_price_usd_cents).replace("€", "USD") }}
+        {% if watch.usd_eur_rate_milli %}
+        × Kurs {{ format_rate(watch.usd_eur_rate_milli) }} = <strong>{{ format_money(watch.purchase_price_cents) }}</strong>
+        {% endif %}
+      </dd>
+      {% else %}
       <dt>Einkaufspreis</dt><dd>{{ format_money(watch.purchase_price_cents) }}</dd>
-      <dt>Zusatzkosten</dt><dd>{{ format_money(watch.extra_costs_cents) }}{% if watch.extra_costs_note %} <span class="muted">({{ watch.extra_costs_note }})</span>{% endif %}</dd>
+      {% endif %}
+      <dt>Zusatzkosten</dt>
+      <dd>
+        {% if watch.extra_costs %}
+        <ul class="spec-list" style="columns:1;padding-left:1.1rem;margin:0">
+          {% for c in watch.extra_costs %}
+          <li><strong>{{ c.category_label }}:</strong> {{ format_money(c.amount_cents) }}</li>
+          {% endfor %}
+        </ul>
+        {% if extra_total_cents %}<div class="mt"><strong>Summe Zusatz:</strong> {{ format_money(extra_total_cents) }}</div>{% endif %}
+        {% else %}—{% endif %}
+      </dd>
+      {% if total_cost_cents is not none %}
+      <dt>EK gesamt (inkl. Zusatz)</dt><dd><strong>{{ format_money(total_cost_cents) }}</strong></dd>
+      {% endif %}
       <dt>Geplanter VK</dt><dd>{{ format_money(watch.target_price_cents) }}</dd>
       <dt>Tatsächlicher VK</dt><dd>{{ format_money(watch.sale_price_cents) }}</dd>
       {% if watch.sold_at %}<dt>Verkauft am</dt><dd>{{ fmt_dt(watch.sold_at) }}</dd>{% endif %}
+      {% if margin_cents is not none %}
+      <dt>Marge</dt>
+      <dd><strong class="{% if margin_cents >= 0 %}tag tag-ok{% else %}tag tag-warn{% endif %}"
+          style="font-size:1rem;padding:.25rem .6rem">{{ format_money(margin_cents) }}</strong></dd>
+      {% endif %}
       <dt>Interne Notizen</dt><dd class="pre">{{ watch.internal_notes or "—" }}</dd>
     </dl>
     <p class="hint">Nur intern sichtbar – wird nie in Anzeigen, ZIPs oder ungeschützte Routen übernommen.</p>
@@ -67,14 +96,16 @@
     <h2>Angaben für Anzeigen</h2>
     <dl class="dl">
       <dt>Zustand</dt><dd>{{ watch.condition or "—" }}</dd>
-      <dt>Zustand im Detail</dt><dd class="pre">{{ watch.condition_description or "—" }}</dd>
-      <dt>Lieferumfang</dt><dd class="pre">{{ watch.included_accessories or "—" }}</dd>
       <dt>Box</dt><dd>{{ watch.box_label }}</dd>
       <dt>Versand</dt><dd class="pre">{{ watch.shipping_info or "—" }}</dd>
+      {% if watch.band %}<dt>Band</dt><dd>{{ watch.band }}</dd>{% endif %}
+      {% if watch.highlight %}<dt>Besonderheit</dt><dd>{{ watch.highlight }}</dd>{% endif %}
       <dt>Status seit</dt><dd>{{ fmt_dt(watch.status_changed_at) }}</dd>
     </dl>
-    <h3>Beschreibung</h3>
-    <p class="pre">{{ watch.description or "—" }}</p>
+    {% if watch.description %}
+    <h3>Beschreibung {% if watch.provenance.value == "wecatalog" %}<span class="tag tag-warn">Katalogimport</span>{% endif %}</h3>
+    <p class="pre">{{ watch.description }}</p>
+    {% endif %}
     <h3>Technische Daten</h3>
     {% if watch.specs %}
     <ul class="spec-list">
@@ -99,7 +130,7 @@
   {% if watch.images %}
   <div class="img-grid">
     {% for image in watch.images %}
-    <figure class="img-card">
+    <figure class="img-card" data-image-id="{{ image.id }}">
       <a href="/images/{{ image.id }}/file" target="_blank">
         <img src="/images/{{ image.id }}/file?display=1" alt="{{ image.original_name }}" loading="lazy">
       </a>
@@ -115,12 +146,12 @@
         <form method="post" action="/images/{{ image.id }}/move" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="direction" value="up">
-          <button class="btn btn-xs" type="submit" {% if loop.first %}disabled{% endif %}>↑</button>
+          <button class="btn btn-xs" type="submit" data-move="up" {% if loop.first %}disabled{% endif %}>↑</button>
         </form>
         <form method="post" action="/images/{{ image.id }}/move" class="inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="direction" value="down">
-          <button class="btn btn-xs" type="submit" {% if loop.last %}disabled{% endif %}>↓</button>
+          <button class="btn btn-xs" type="submit" data-move="down" {% if loop.last %}disabled{% endif %}>↓</button>
         </form>
         <a class="btn btn-xs" href="/images/{{ image.id }}/adjust">Bearbeiten</a>
         <form method="post" action="/images/{{ image.id }}/delete" class="inline"
@@ -146,13 +177,27 @@
   <h2>Status & Verlauf</h2>
   <form method="post" action="/watches/{{ watch.id }}/status" class="filter-bar">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <select name="status">
+    <select name="status" id="status">
       {% for s in statuses %}
       <option value="{{ s.value }}" {% if watch.status.value == s.value %}selected{% endif %}>{{ s.label }}</option>
       {% endfor %}
     </select>
     <input name="note" maxlength="300" placeholder="Notiz zum Wechsel (optional)">
     <button class="btn btn-primary" type="submit">Status setzen</button>
+
+    <dialog class="sale-dialog">
+      <h3>Verkauf abschließen</h3>
+      <label for="sale_price_dialog">Endgültiger Verkaufspreis (EUR) *</label>
+      <input id="sale_price_dialog" name="sale_price" inputmode="decimal"
+             placeholder="z. B. 1.250,00"
+             value="{{ format_money(watch.sale_price_cents).replace(' €', '') if watch.sale_price_cents is not none else '' }}">
+      <p class="hint">Pflichtangabe beim Setzen auf „Verkauft“ – Grundlage für Marge und die
+        spätere Verkaufsauswertung.</p>
+      <div class="form-actions">
+        <button class="btn btn-primary" type="submit">Verkauf speichern</button>
+        <button class="btn" type="button" data-sale-cancel>Abbrechen</button>
+      </div>
+    </dialog>
   </form>
 
   {% if watch.status_events %}

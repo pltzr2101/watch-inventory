@@ -8,7 +8,7 @@ from sqlalchemy import or_, select
 from ..csrf import verify_csrf
 from ..deps import DbDep, SettingsDep, load_watch
 from ..flash import flash
-from ..forms import apply_watch_values, gen_sku, parse_watch_form
+from ..forms import SPEC_FIELDS, apply_watch_values, gen_sku, parse_watch_form
 from ..models import (
     BOX_OPTIONS,
     StatusEvent,
@@ -16,6 +16,8 @@ from ..models import (
     WatchStatus,
     utcnow,
 )
+from ..money import MoneyError, format_money, parse_money
+from ..services import image_ingest
 from ..templating import render
 
 router = APIRouter(tags=["watches"])
@@ -43,27 +45,38 @@ def set_status(watch: Watch, to_status: WatchStatus, note: str | None = None) ->
 
 
 def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) -> dict:
-    if watch is not None and values is None:
-        from ..money import format_money
-        from ..services.wecatalog import specs_as_text
+    from ..money import format_rate
 
+    if watch is not None and values is None:
+        spec_values: dict[str, str] = {}
+        for item in watch.specs or []:
+            for key, label in SPEC_FIELDS:
+                if str(item.get("key", "")) == label:
+                    spec_values[key] = str(item.get("value", ""))
+        cost_rows = [
+            (format_money(c.amount_cents).replace(" €", ""), c.category.value)
+            for c in watch.extra_costs
+        ]
         values = {
             "sku": watch.sku,
             "title": watch.title,
             "brand": watch.brand or "",
             "model": watch.model or "",
+            "factory": watch.factory or "",
+            "version": watch.version or "",
+            "band": watch.band or "",
+            "highlight": watch.highlight or "",
             "status": watch.status.value,
             "purchase_price": (
-                format_money(watch.purchase_price_cents).replace(" €", "")
-                if watch.purchase_price_cents is not None
+                format_money(watch.purchase_price_usd_cents).replace(" €", "")
+                if watch.purchase_price_usd_cents is not None
                 else ""
             ),
-            "extra_costs": (
-                format_money(watch.extra_costs_cents).replace(" €", "")
-                if watch.extra_costs_cents is not None
+            "usd_eur_rate": (
+                format_rate(watch.usd_eur_rate_milli)
+                if watch.usd_eur_rate_milli is not None
                 else ""
             ),
-            "extra_costs_note": watch.extra_costs_note or "",
             "target_price": (
                 format_money(watch.target_price_cents).replace(" €", "")
                 if watch.target_price_cents is not None
@@ -75,20 +88,39 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
                 else ""
             ),
             "condition": watch.condition or "",
-            "condition_description": watch.condition_description or "",
-            "included_accessories": watch.included_accessories or "",
             "box_option": watch.box_option or "",
             "shipping_info": watch.shipping_info or "",
-            "description": watch.description or "",
-            "specs_text": specs_as_text(watch.specs),
             "internal_notes": watch.internal_notes or "",
             "public_approved": watch.public_approved,
+            "spec_values": spec_values,
+            "cost_rows": cost_rows,
+            "extra_cost_rows": str(max(len(cost_rows), 1)),
         }
+    else:
+        # Neu-Anlage oder Fehler-Rückgabe: parse-Werte renderbar aufbereiten.
+        v = dict(values or {})
+        if "extra_costs" in v:
+            cost_rows = [
+                (format_money(amount).replace(" €", ""), category)
+                for amount, category in v["extra_costs"]
+            ]
+        else:
+            cost_rows = [("", "") for _ in range(max(int(v.get("extra_cost_rows") or 1), 1))]
+        spec_values = {}
+        for item in v.get("specs") or []:
+            for key, label in SPEC_FIELDS:
+                if item.get("key") == label:
+                    spec_values[key] = item.get("value", "")
+        v["cost_rows"] = cost_rows
+        v["extra_cost_rows"] = str(max(len(cost_rows), 1))
+        v["spec_values"] = spec_values
+        values = v
     return {
         "values": values or {},
         "errors": errors or {},
         "statuses": list(WatchStatus),
         "box_options": BOX_OPTIONS,
+        "spec_fields": SPEC_FIELDS,
         "watch": watch,
     }
 
@@ -111,6 +143,7 @@ def watches_list(
                 Watch.sku.ilike(pattern),
                 Watch.brand.ilike(pattern),
                 Watch.model.ilike(pattern),
+                Watch.factory.ilike(pattern),
                 Watch.internal_notes.ilike(pattern),
             )
         )
@@ -139,9 +172,13 @@ def watch_new_form(request: Request):
 
 
 @router.post("/watches/new", dependencies=_MUTATE)
-async def watch_new(request: Request, db=DbDep):
+async def watch_new(request: Request, db=DbDep, settings=SettingsDep):
     form = await request.form()
     values, errors = parse_watch_form(form)
+    # Uploads vollständig VOR dem Datensatz prüfen (kein inkonsistenter Rest):
+    prepared, upload_error = await image_ingest.prepare_uploads(form, settings)
+    if upload_error:
+        errors["files"] = upload_error
     if errors:
         return render(
             request,
@@ -160,20 +197,82 @@ async def watch_new(request: Request, db=DbDep):
     watch.status_events.append(
         StatusEvent(from_status=None, to_status=watch.status, note="Angelegt")
     )
+    try:
+        image_ingest.store_prepared(db, watch, prepared, settings)
+    except OSError:
+        flash(request, "Speichern fehlgeschlagen – es wurden keine Daten übernommen.", "error")
+        return render(
+            request,
+            "watch_form.html",
+            status_code=400,
+            **_watch_form_context(
+                None, values, {**errors, "files": "Dateien konnten nicht gespeichert werden."}
+            ),
+        )
     db.commit()
     flash(request, f"Uhr {watch.sku} angelegt.", "success")
     return _redirect(f"/watches/{watch.id}")
 
 
+@router.get("/api/usd-rate")
+def usd_rate(settings=SettingsDep):
+    """Aktuellen USD→EUR-Kurs als Vorschlag (manuell überschreibbar).
+
+    Nur auf Knopfdruck abgefragt (kein Hintergrundlauf); `FX_RATE_URL=""`
+    deaktiviert den Dienst. Fehler führen zu einem klaren 502-Text.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    from ..money import RateError, parse_rate
+
+    if not settings.fx_rate_url:
+        raise HTTPException(
+            status_code=404, detail="Kursdienst ist deaktiviert (FX_RATE_URL leer)."
+        )
+    request_obj = urllib.request.Request(  # noqa: S310 – feste konfigurierte URL
+        settings.fx_rate_url, headers={"Accept": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=5) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Kursdienst nicht erreichbar: {exc}"
+        ) from exc
+    try:
+        rate = float(payload["rates"]["EUR"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Kursdienst lieferte unerwartete Daten."
+        ) from exc
+    try:
+        rate_milli = parse_rate(f"{rate:.4f}")
+    except RateError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    from ..money import format_rate
+
+    return {"rate": format_rate(rate_milli), "rate_milli": rate_milli}
+
+
 @router.get("/watches/{watch_id}")
 def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep):
     watch = load_watch(db, watch_id)
+    extra_total = sum(c.amount_cents for c in watch.extra_costs)
+    total_cost = (watch.purchase_price_cents or 0) + extra_total
+    margin = None
+    if watch.sale_price_cents is not None and watch.purchase_price_cents is not None:
+        margin = watch.sale_price_cents - total_cost
     return render(
         request,
         "watch_detail.html",
         watch=watch,
         statuses=list(WatchStatus),
         wecatalog_enabled=settings.wecatalog_enabled,
+        extra_total_cents=extra_total,
+        total_cost_cents=total_cost if watch.purchase_price_cents is not None else None,
+        margin_cents=margin,
     )
 
 
@@ -198,6 +297,17 @@ async def watch_edit(request: Request, watch_id: str, db=DbDep):
 
     apply_watch_values(watch, values)
     new_status = WatchStatus(values["status"])
+    if new_status == WatchStatus.SOLD and values.get("sale_price") is None:
+        return render(
+            request,
+            "watch_form.html",
+            status_code=400,
+            **_watch_form_context(
+                watch,
+                values,
+                {**errors, "sale_price": "Endgültiger Verkaufspreis ist für „Verkauft“ Pflicht."},
+            ),
+        )
     if new_status != watch.status:
         set_status(watch, new_status, note="Über Bearbeitungsformular")
     # SKU bleibt erhalten, sofern keine gültige neue angegeben wurde:
@@ -225,12 +335,26 @@ async def watch_status(
     db=DbDep,
     status: str = Form(...),
     note: str = Form(default=""),
+    sale_price: str = Form(default=""),
 ):
     watch = load_watch(db, watch_id)
     try:
         new_status = WatchStatus(status)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Unbekannter Status.") from exc
+    if new_status == WatchStatus.SOLD:
+        try:
+            sale = parse_money(sale_price)
+        except MoneyError as exc:
+            raise HTTPException(status_code=400, detail=f"Verkaufspreis: {exc}") from exc
+        if sale is None:
+            sale = watch.sale_price_cents
+        if sale is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Endgültiger Verkaufspreis ist beim Setzen auf „Verkauft“ Pflicht.",
+            )
+        watch.sale_price_cents = sale
     set_status(watch, new_status, note=note.strip()[:300] or None)
     db.commit()
     flash(request, f"Status → {new_status.label}.", "success")

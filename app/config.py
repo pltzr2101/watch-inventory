@@ -92,6 +92,9 @@ class Settings:
     watermark_enabled: bool = False
     watermark_text: str = ""
     listing_template_dir: Path | None = None
+    # USD→EUR-Kursdienst für das Einkaufsformular (nur Vorschlag per Knopf;
+    # "" deaktiviert den Dienst, Eingabe dann rein manuell).
+    fx_rate_url: str = "https://api.frankfurter.app/latest?from=USD&to=EUR"
     extra: dict = field(default_factory=dict)
 
     @property
@@ -175,4 +178,7 @@ def load_settings() -> Settings:
         watermark_enabled=_bool_env("WATERMARK_ENABLED", False),
         watermark_text=_opt_env("WATERMARK_TEXT")[:80],
         listing_template_dir=listing_template_dir,
+        fx_rate_url=_opt_env(
+            "FX_RATE_URL", "https://api.frankfurter.app/latest?from=USD&to=EUR"
+        ),
     )

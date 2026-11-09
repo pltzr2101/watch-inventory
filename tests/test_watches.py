@@ -12,8 +12,9 @@ def test_create_watch_and_money_persisted(auth_client, env) -> None:
     r = auth_client.get(f"/watches/{watch_id}")
     assert r.status_code == 200
     assert "Omega Speedmaster Professional" in r.text
-    # Geld exakt: 123456 + 4510 + 210000 Cent
-    assert "1.234,56" in r.text
+    # USD-Einkauf 1.000,00 × Kurs 1,1000 = EUR 1.100,00 (exakt in Cents)
+    assert "1.000,00 USD" in r.text
+    assert "1.100,00" in r.text
     assert "45,10" in r.text
     assert "2.100,00" in r.text
 
@@ -24,8 +25,13 @@ def test_create_watch_and_money_persisted(auth_client, env) -> None:
     with Session() as db:
         watch = db.get(Watch, watch_id)
         assert watch is not None
-        assert watch.purchase_price_cents == 123456
-        assert watch.extra_costs_cents == 4510
+        assert watch.purchase_price_usd_cents == 100_000
+        assert watch.usd_eur_rate_milli == 1100
+        assert watch.purchase_price_cents == 110_000
+        assert len(watch.extra_costs) == 2
+        assert watch.extra_costs[0].amount_cents == 4510
+        assert watch.extra_costs[0].category.value == "de_dhl"
+        assert watch.extra_costs[1].amount_cents == 1800
         assert watch.target_price_cents == 210000
         assert watch.status == WatchStatus.IN_GERMANY
         assert watch.provenance.value == "manual"
@@ -141,8 +147,10 @@ def test_edit_updates_fields(auth_client) -> None:
             "title": "Omega Speedmaster (Edit)",
             "status": "reserved",
             "purchase_price": "999,99",
+            "usd_eur_rate": "1,0000",
             "internal_notes": "neue Notiz",
-            "specs_text": "Kaliber: 3861",
+            "spec_on_kaliber": "on",
+            "spec_kaliber": "3861",
         },
         csrf=csrf,
         follow_redirects=False,

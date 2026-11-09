@@ -19,10 +19,8 @@ def test_reddit_and_facebook_generated_from_saved_data(auth_client) -> None:
     body = reddit.text
     assert "Omega" in body and "Speedmaster Professional" in body
     assert "Sehr gut" in body
-    assert "Box, Papiere" in body
     assert "Versicherter Versand DE" in body
     assert "2.100,00" in body  # Verkaufspreis darf rein
-    assert "Gebrauchsspuren am Band" in body
     assert "3861" in body
     _assert_confidential_free(body, context="Reddit-Seite")
 
@@ -211,7 +209,9 @@ def test_platform_templates_and_hints_configurable(auth_client, env, monkeypatch
 def test_reddit_code_and_telegram_templates_render(auth_client) -> None:
     watch_id = create_watch(
         auth_client,
-        specs_text="Factory: Clean Factory\nKaliber: 3861",
+        factory="Clean Factory",
+        spec_on_kaliber="on",
+        spec_kaliber="3861",
     )
 
     rc = auth_client.get(f"/watches/{watch_id}/listing?platform=reddit_code")
@@ -232,7 +232,7 @@ def test_reddit_code_and_telegram_templates_render(auth_client) -> None:
 def test_box_and_factory_appear_in_listing(auth_client) -> None:
     watch_id = create_watch(
         auth_client,
-        specs_text="Factory: Clean Factory",
+        factory="Clean Factory",
         box="box",
     )
     r = auth_client.get(f"/watches/{watch_id}/listing?platform=reddit")

@@ -256,23 +256,17 @@ def test_update_preview_never_overwrites_internal_fields(wclient) -> None:
         purchase_before = watch.purchase_price_cents
         notes_before = watch.internal_notes
 
-    # Nutzer ändert DANACH seine Beschreibung eigenständig:
-    csrf = csrf_for(wclient, f"/watches/{watch_id}/edit")
-    post_form(
-        wclient,
-        f"/watches/{watch_id}/edit",
-        {
-            "title": "Omega Speedmaster Professional",
-            "status": "in_germany",
-            "purchase_price": "1.234,56",
-            "description": "EIGENE überarbeitete Beschreibung.",
-            "internal_notes": notes_before,
-            "extra_costs": "45,10",
-            "target_price": "2.100,00",
-        },
-        csrf=csrf,
-        follow_redirects=False,
-    )
+    # Nutzer ändert DANACH seine Beschreibung eigenständig (das Feld ist
+    # kein Formularfeld mehr – der Wert steht direkt im Datensatz):
+    from app.db import make_session_factory
+    from app.models import Watch
+
+    Session = make_session_factory(wclient.app.state.engine)
+    with Session() as db:
+        watch = db.get(Watch, watch_id)
+        assert watch is not None
+        watch.description = "EIGENE überarbeitete Beschreibung."
+        db.commit()
 
     # Importvorschlag der Quelle mit NEUER Katalogbeschreibung + Titeländerung:
     preview_id = _create_preview(
@@ -298,7 +292,7 @@ def test_update_preview_never_overwrites_internal_fields(wclient) -> None:
     with Session() as db:
         watch = db.get(Watch, watch_id)
         # Kein Preissetz aus der Quelle:
-        assert watch.purchase_price_cents == purchase_before == 123456
+        assert watch.purchase_price_cents == purchase_before
         assert watch.target_price_cents == 210000
         assert watch.internal_notes == notes_before
         # Eigene Beschreibung NICHT stillschweigend überschrieben (und nicht

@@ -103,6 +103,26 @@ BOX_OPTIONS: dict[str, str] = {
 }
 
 
+class ExtraCostCategory(StrEnum):
+    """Kategorien interner Zusatzkosten (Einzelpositionen je Uhr)."""
+
+    CHINA_LOGISTICS = "china_logistics"  # Versand/Versicherung aus China
+    DE_DHL = "de_dhl"  # Versand aus Deutschland (DHL)
+    WISE = "wise"  # Wise-/Zahlungsgebühren
+    BOX = "box"  # Box-Einkauf
+    SONSTIGES = "sonstiges"
+
+    @property
+    def label(self) -> str:
+        return {
+            "china_logistics": "Versand/Versicherung China",
+            "de_dhl": "Versand aus Deutschland (DHL)",
+            "wise": "Wise-Gebühren",
+            "box": "Box",
+            "sonstiges": "Sonstiges",
+        }[self.value]
+
+
 def _sa_enum(enum_cls: type[enum.Enum], name: str):  # type: ignore[no-untyped-def]
     return SAEnum(
         enum_cls,
@@ -121,16 +141,20 @@ class Watch(Base):
             name="ck_watch_purchase_price",
         ),
         CheckConstraint(
-            "extra_costs_cents IS NULL OR extra_costs_cents >= 0",
-            name="ck_watch_extra_costs",
-        ),
-        CheckConstraint(
             "target_price_cents IS NULL OR target_price_cents >= 0",
             name="ck_watch_target_price",
         ),
         CheckConstraint(
             "sale_price_cents IS NULL OR sale_price_cents >= 0",
             name="ck_watch_sale_price",
+        ),
+        CheckConstraint(
+            "purchase_price_usd_cents IS NULL OR purchase_price_usd_cents >= 0",
+            name="ck_watch_purchase_usd",
+        ),
+        CheckConstraint(
+            "usd_eur_rate_milli IS NULL OR usd_eur_rate_milli > 0",
+            name="ck_watch_usd_rate",
         ),
     )
 
@@ -139,6 +163,11 @@ class Watch(Base):
     title: Mapped[str] = mapped_column(String(200))
     brand: Mapped[str | None] = mapped_column(String(120))
     model: Mapped[str | None] = mapped_column(String(160))
+    # Titel-Bausteine (Titel setzt sich daraus zusammen, bleibt editierbar):
+    factory: Mapped[str | None] = mapped_column(String(80))
+    version: Mapped[str | None] = mapped_column(String(40))
+    band: Mapped[str | None] = mapped_column(String(80))
+    highlight: Mapped[str | None] = mapped_column(String(160))
 
     status: Mapped[WatchStatus] = mapped_column(
         _sa_enum(WatchStatus, "watch_status"), default=WatchStatus.IN_CHINA, index=True
@@ -146,20 +175,22 @@ class Watch(Base):
     status_changed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     # Vertraulich – niemals in öffentliche Routen oder Anzeigen übernehmen:
+    # `purchase_price_cents` (EUR) ist die maßgebliche Grundlage für Marge;
+    # bei USD-Eingabe wird es aus USD × Kurs abgeleitet (historischer Kurs).
     purchase_price_cents: Mapped[int | None] = mapped_column(Integer)
-    extra_costs_cents: Mapped[int | None] = mapped_column(Integer)
-    extra_costs_note: Mapped[str | None] = mapped_column(Text)
+    purchase_price_usd_cents: Mapped[int | None] = mapped_column(Integer)
+    usd_eur_rate_milli: Mapped[int | None] = mapped_column(Integer)  # EUR pro USD × 1000
     internal_notes: Mapped[str | None] = mapped_column(Text)
 
     target_price_cents: Mapped[int | None] = mapped_column(Integer)
     sale_price_cents: Mapped[int | None] = mapped_column(Integer)
 
     condition: Mapped[str | None] = mapped_column(String(80))
-    condition_description: Mapped[str | None] = mapped_column(Text)
-    included_accessories: Mapped[str | None] = mapped_column(Text)
     # none | box | optional – NULL = nicht angegeben (wird nie geraten).
     box_option: Mapped[str | None] = mapped_column(String(16))
     shipping_info: Mapped[str | None] = mapped_column(Text)
+    # Ausschließlich für autorisierte Wecatalog-Übernahmen (nicht im
+    # Watch-Formular gepflegt; eigene Beschreibungen entfallen bewusst).
     description: Mapped[str | None] = mapped_column(Text)
     specs: Mapped[list] = mapped_column(JSON, default=list)
 
@@ -195,6 +226,11 @@ class Watch(Base):
         cascade="all, delete-orphan",
         order_by="WatchImage.sort_order",
     )
+    extra_costs: Mapped[list[WatchExtraCost]] = relationship(
+        back_populates="watch",
+        cascade="all, delete-orphan",
+        order_by="WatchExtraCost.id",
+    )
     status_events: Mapped[list[StatusEvent]] = relationship(
         back_populates="watch",
         cascade="all, delete-orphan",
@@ -207,6 +243,32 @@ class Watch(Base):
     listing_drafts: Mapped[list[ListingDraft]] = relationship(
         back_populates="watch", cascade="all, delete-orphan"
     )
+
+
+class WatchExtraCost(Base):
+    """Einzelposition zusätzlicher Einkaufskosten (EUR) – Marge-Grundlage."""
+
+    __tablename__ = "watch_extra_costs"
+    __table_args__ = (
+        CheckConstraint("amount_cents >= 0", name="ck_extra_cost_amount"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    watch_id: Mapped[str] = mapped_column(
+        ForeignKey("watches.id", ondelete="CASCADE"), index=True
+    )
+    category: Mapped[ExtraCostCategory] = mapped_column(
+        _sa_enum(ExtraCostCategory, "extra_cost_category")
+    )
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(String(200))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    watch: Mapped[Watch] = relationship(back_populates="extra_costs")
+
+    @property
+    def category_label(self) -> str:
+        return self.category.label
 
 
 class StatusEvent(Base):

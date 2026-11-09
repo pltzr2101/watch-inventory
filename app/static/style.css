@@ -414,6 +414,33 @@ legend { font-weight: 560; font-size: 0.9rem; letter-spacing: 0.04em; padding: 0
 
 /* ---------- Spec-Liste & Details ---------- */
 .spec-list { columns: 2; gap: 1.6rem; padding-left: 1.15rem; margin: 0.35rem 0; }
+
+/* ---------- Neue Formularbausteine (Kosten, Kurs, Specs) ---------- */
+.rate-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.rate-row input { flex: 1 1 10rem; min-width: 9rem; }
+.cost-rows { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.35rem 0 0.6rem; }
+.cost-row { display: flex; gap: 0.55rem; align-items: center; }
+.cost-row input { flex: 1 1 7rem; min-width: 6rem; }
+.cost-row select { flex: 1 1 12rem; min-width: 11rem; }
+.spec-row { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.45rem; }
+.spec-row .checkbox { margin: 0; flex: 0 0 auto; }
+.spec-row input[type="text"], .spec-row input:not([type]) { flex: 1 1 14rem; }
+.spec-row input[data-disabled="1"]:not(:focus) { opacity: 0.55; }
+
+/* Verkaufs-Dialog (Pflichtfeld endgültiger VK) */
+dialog.sale-dialog {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 1.4rem;
+  max-width: min(26rem, calc(100vw - 2rem));
+  box-shadow: var(--shadow-3);
+}
+dialog.sale-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+dialog.sale-dialog h3 { margin-top: 0; }
+dialog.sale-dialog .form-actions { margin-top: 1.1rem; }
+
 .spec-list li { margin: 0.15rem 0; }
 details summary { cursor: pointer; color: var(--accent); font-weight: 500; }
 details summary:hover { color: var(--accent-hi); }

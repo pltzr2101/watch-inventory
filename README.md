@@ -120,3 +120,22 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
 - Grenzen der Katalog-Integration: `docs/WEBCATALOG.md`
 - Spätere Ausbaustufen (Bestandsseite öffentlich, Analytics):
   `docs/spaete-ausbaustufen.md`
+
+## V2-Formularwork (Bestandsverwaltung)
+
+- **Anlage nur noch über „Bestand → + Uhr anlegen“** (ein Formular inkl. direktem
+  Foto-Upload). Die alten `/dump`-URLs leiten weiter; die Nav zeigt nur noch
+  Übersicht · Bestand · Importe · Vorlagen.
+- **Titel** setzt sich aus Marke, Factory, Version, Modell, Band und
+  Farbe/Besonderheit zusammen (`Marke Factory – Version – Modell, Band, Highlight`),
+  live im Formular und serverseitig als Rückfallebene; manuelle Eingaben gewinnen.
+- **Einkauf in USD** + historischer Kurs (`FX_RATE_URL` liefert nur einen Vorschlag);
+  EUR-EK wird exakt in Cent gerechnet und ist die Marge-Grundlage.
+- **Zusatzkosten** als Einzelpositionen mit Kategorie (China-Logistik, DHL, Wise,
+  Box, Sonstiges), dynamisch erweiterbar.
+- **Technische Daten** als Checkliste (Kaliber, Gehäusedurchmesser, Werk):
+  Haken = Pflichtwert.
+- **Statuswechsel auf „Verkauft“** erzwingt den endgültigen Verkaufspreis
+  (Dialog, serverseitig durchgesetzt); die Detailseite zeigt die Marge je Uhr.
+- Entfallen: Zustandsbeschreibung, Lieferumfang und eigene Beschreibungstexte
+  (Beschreibung bleibt ausschließlich als Wecatalog-Übernahmefeld erhalten).

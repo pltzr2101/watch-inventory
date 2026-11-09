@@ -37,8 +37,6 @@ TEMPLATE_CONTEXT_KEYS = frozenset(
         "model",
         "price",
         "condition",
-        "condition_description",
-        "accessories",
         "shipping_info",
         "description",
         "specs",
@@ -116,13 +114,15 @@ def build_context(watch: Watch) -> dict:
                 return item["value"]
         return None
 
-    # Factory/Movement als bequeme Zugriffe auf die technischen Daten;
-    # nur aus freigegebenen/gepflegten Specs ableitbar (nie raten).
-    factory = spec_value("factory", "hersteller", "manufacturer") if specs else None
+    # Factory bevorzugt aus dem eigenen Stammfeld; Rückfall auf Specs für
+    # Alt-Daten. Movement nur aus freigegebenen/gepflegten Specs (nie raten).
+    factory = watch.factory or (
+        spec_value("factory", "hersteller", "manufacturer") if specs else None
+    )
     movement = spec_value("movement", "werk", "kaliber", "caliber", "calibre") if specs else None
-    if factory is None and specs:
-        missing.append("Factory (Hersteller)")
-    if movement is None and specs:
+    if not factory:
+        missing.append("Factory")
+    if movement is None:
         missing.append("Werk (Movement)")
 
     context = {
@@ -132,12 +132,6 @@ def build_context(watch: Watch) -> dict:
         "model": take("model", "Modell", watch.model),
         "price": price_str,
         "condition": take("condition", "Zustand", watch.condition),
-        "condition_description": take(
-            "condition_description", "Zustandsbeschreibung", watch.condition_description
-        ),
-        "accessories": take(
-            "included_accessories", "Lieferumfang", watch.included_accessories
-        ),
         "shipping_info": take("shipping_info", "Versandinformationen", watch.shipping_info),
         "description": take("description", "Beschreibung", watch.description),
         "specs": specs_list,
@@ -167,8 +161,6 @@ def sample_context() -> dict:
             "model": "Submariner 126610LN",
             "price": "1.234,56 €",
             "condition": "Neu",
-            "condition_description": "Ungetragen, Etiketten vorhanden.",
-            "accessories": "Box, Papiere, volle Armbandlänge",
             "shipping_info": "DHL versichert, 1–2 Tage nach Zahlung",
             "description": "Beispielhafte Kurzbeschreibung.",
             "specs": [{"key": "Kaliber", "value": "Clone VS352"}],

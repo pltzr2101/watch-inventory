@@ -12,11 +12,6 @@ Shipping: FREE tracked DHL within Germany & 15 EUR tracked DHL within the EU Onl
 
 {% if price %}Price: {{ price }}
 ✅ Seller Code: 1949
-{% endif %}{% if condition_description %}
-Condition details: {{ condition_description }}
-
-{% endif %}{% if accessories %}
-Box/Accessories: {{ accessories }}
 {% endif %}{% if description or factory %}
 Notes: {{ description }}{% if factory %}{% if description %} · {% endif %}Werks-Code {{ factory }}{% endif %}
 {% endif %}{% if shipping_info %}

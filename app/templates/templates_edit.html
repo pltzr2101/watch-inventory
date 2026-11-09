@@ -54,8 +54,8 @@
 <section class="card">
   <h2>Verfügbare Variablen</h2>
   <p class="mono">{{ available_keys | join(", ") }}</p>
-  <p class="hint">Bedingt (nur wenn gepflegt): condition, condition_description,
-    accessories, shipping_info, description, factory, movement, box (none/box/optional),
+  <p class="hint">Bedingt (nur wenn gepflegt): condition, shipping_info, description, factory,
+    movement, box (none/box/optional),
     price. Technische Daten als <code>{% raw %}{% for spec in specs %}…{% endfor %}{% endraw %}</code>
     mit <code>spec.key</code>/<code>spec.value</code>.</p>
 </section>

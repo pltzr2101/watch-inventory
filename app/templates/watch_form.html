@@ -13,29 +13,44 @@
 </div>
 {% endif %}
 
-<form method="post" action="{{ ("/watches/" ~ watch.id ~ "/edit") if watch else "/watches/new" }}" class="form-grid">
+<form method="post" action="{{ ("/watches/" ~ watch.id ~ "/edit") if watch else "/watches/new" }}"
+      class="form-grid" {% if not watch %}enctype="multipart/form-data"{% endif %} data-watch-form>
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
   <fieldset>
-    <legend>Stammdaten</legend>
+    <legend>Stammdaten & Titel</legend>
     <label for="sku">Artikelnummer (leer = automatisch)</label>
     <input id="sku" name="sku" value="{{ values.get('sku') or '' }}" placeholder="z. B. U-0007">
     {% if errors.get("sku") %}<span class="field-error">{{ errors.sku }}</span>{% endif %}
 
-    <label for="title">Titel / Marke-Modell *</label>
-    <input id="title" name="title" required maxlength="200" value="{{ values.get('title') or '' }}">
+    <div class="two-col">
+      <div>
+        <label for="brand">Marke *</label>
+        <input id="brand" name="brand" maxlength="120" value="{{ values.get('brand') or '' }}" data-title-part>
+        <label for="factory">Factory</label>
+        <input id="factory" name="factory" maxlength="80" placeholder="z. B. VSF" value="{{ values.get('factory') or '' }}" data-title-part>
+        <label for="version">Version (optional)</label>
+        <input id="version" name="version" maxlength="40" placeholder="z. B. V2" value="{{ values.get('version') or '' }}" data-title-part>
+      </div>
+      <div>
+        <label for="model">Modell *</label>
+        <input id="model" name="model" maxlength="160" placeholder="z. B. Submariner Date" value="{{ values.get('model') or '' }}" data-title-part>
+        <label for="band">Band</label>
+        <input id="band" name="band" maxlength="80" placeholder="z. B. Jubilee" value="{{ values.get('band') or '' }}" data-title-part>
+        <label for="highlight">Farbe / Besonderheit</label>
+        <input id="highlight" name="highlight" maxlength="160" placeholder="z. B. green sunburst dial, „Bruce Wayne“" value="{{ values.get('highlight') or '' }}" data-title-part>
+      </div>
+    </div>
+
+    <label for="title">Titel (setzt sich zusammen – manuelle Änderung gewinnt) *</label>
+    <input id="title" name="title" maxlength="200" value="{{ values.get('title') or '' }}" data-auto-title
+           placeholder="erscheint hier automatisch, sobald Marke/Modell eingetragen sind">
     {% if errors.get("title") %}<span class="field-error">{{ errors.title }}</span>{% endif %}
-
-    <label for="brand">Marke</label>
-    <input id="brand" name="brand" maxlength="120" value="{{ values.get('brand') or '' }}">
-
-    <label for="model">Modell</label>
-    <input id="model" name="model" maxlength="160" value="{{ values.get('model') or '' }}">
 
     <label for="status">Bestand-/Lieferstatus *</label>
     <select id="status" name="status">
       {% for s in statuses %}
-      <option value="{{ s.value }}" {% if values.get("status") == s.value %}selected{% endif %}>{{ s.label }}</option>
+      <option value="{{ s.value }}" {% if values.get("status", "in_germany") == s.value %}selected{% endif %}>{{ s.label }}</option>
       {% endfor %}
     </select>
     {% if errors.get("status") %}<span class="field-error">{{ errors.status }}</span>{% endif %}
@@ -43,37 +58,62 @@
 
   <fieldset>
     <legend>Preise (intern, vertraulich)</legend>
-    <label for="purchase_price">Einkaufspreis</label>
-    <input id="purchase_price" name="purchase_price" inputmode="decimal" placeholder="1.234,56" value="{{ values.get('purchase_price') or '' }}">
+    <label for="purchase_price">Einkaufspreis in USD *</label>
+    <input id="purchase_price" name="purchase_price" inputmode="decimal" placeholder="z. B. 1.050,00"
+           value="{{ values.get('purchase_price') or '' }}" data-rate-usd>
     {% if errors.get("purchase_price") %}<span class="field-error">{{ errors.purchase_price }}</span>{% endif %}
 
-    <label for="extra_costs">Zusätzliche Einkaufskosten</label>
-    <input id="extra_costs" name="extra_costs" inputmode="decimal" placeholder="Versand, Versicherung, Import …" value="{{ values.get('extra_costs') or '' }}">
+    <label for="usd_eur_rate">Kurs USD → EUR zum Zeitpunkt des Einkaufs *</label>
+    <div class="rate-row">
+      <input id="usd_eur_rate" name="usd_eur_rate" inputmode="decimal" placeholder="z. B. 1,0923"
+             value="{{ values.get('usd_eur_rate') or '' }}" data-rate-field>
+      <button type="button" class="btn" data-rate-fetch>Aktuellen Kurs holen</button>
+    </div>
+    {% if errors.get("usd_eur_rate") %}<span class="field-error">{{ errors.usd_eur_rate }}</span>{% endif %}
+    <p class="hint">Ergibt als EK in Euro: <strong data-rate-preview>—</strong>
+      (Dienst konfigurierbar/abschaltbar, Standard: ECB-Kurse über frankfurter.app;
+      der eingetragene Kurs bleibt historisch gespeichert.)</p>
+
+    <label>Zusätzliche Einkaufskosten (Einzelpositionen in EUR)</label>
+    <div class="cost-rows" data-cost-rows>
+      {% for amount, category in values.get("cost_rows") or [("","")] %}
+      <div class="cost-row">
+        <input name="extra_cost_amount_{{ loop.index0 }}" inputmode="decimal" placeholder="z. B. 30,00"
+               value="{{ amount }}" aria-label="Betrag in Euro">
+        <select name="extra_cost_category_{{ loop.index0 }}" aria-label="Art der Kosten">
+          <option value="">– Art wählen –</option>
+          <option value="china_logistics" {% if category == "china_logistics" %}selected{% endif %}>Versand/Versicherung China</option>
+          <option value="de_dhl" {% if category == "de_dhl" %}selected{% endif %}>Versand aus Deutschland (DHL)</option>
+          <option value="wise" {% if category == "wise" %}selected{% endif %}>Wise-Gebühren</option>
+          <option value="box" {% if category == "box" %}selected{% endif %}>Box</option>
+          <option value="sonstiges" {% if category == "sonstiges" %}selected{% endif %}>Sonstiges</option>
+        </select>
+        <button type="button" class="btn btn-xs" data-cost-remove aria-label="Position entfernen">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+    <input type="hidden" name="extra_cost_rows" value="{{ values.get('extra_cost_rows') or '1' }}" data-cost-count>
+    <button type="button" class="btn btn-sm" data-cost-add>+ Weitere Kosten erfassen</button>
     {% if errors.get("extra_costs") %}<span class="field-error">{{ errors.extra_costs }}</span>{% endif %}
+    {% for key, msg in errors.items() if key.startswith("extra_cost_") %}
+    <span class="field-error">{{ msg }}</span>
+    {% endfor %}
 
-    <label for="extra_costs_note">Art der Zusatzkosten</label>
-    <input id="extra_costs_note" name="extra_costs_note" maxlength="500" value="{{ values.get('extra_costs_note') or '' }}">
-
-    <label for="target_price">Geplanter Verkaufspreis</label>
+    <label for="target_price">Geplanter Verkaufspreis (EUR)</label>
     <input id="target_price" name="target_price" inputmode="decimal" value="{{ values.get('target_price') or '' }}">
     {% if errors.get("target_price") %}<span class="field-error">{{ errors.target_price }}</span>{% endif %}
 
-    <label for="sale_price">Tatsächlicher Verkaufspreis</label>
+    <label for="sale_price">Tatsächlicher Verkaufspreis (EUR)</label>
     <input id="sale_price" name="sale_price" inputmode="decimal" value="{{ values.get('sale_price') or '' }}">
     {% if errors.get("sale_price") %}<span class="field-error">{{ errors.sale_price }}</span>{% endif %}
     <p class="hint">Diese Felder erscheinen nie in Anzeigen, Exporten oder ungeschützten Routen.</p>
   </fieldset>
 
   <fieldset>
-    <legend>Zustand & Lieferumfang</legend>
+    <legend>Zustand</legend>
     <label for="condition">Zustand (kurz)</label>
-    <input id="condition" name="condition" maxlength="80" placeholder="Sehr gut" value="{{ values.get('condition') or '' }}">
-
-    <label for="condition_description">Zustandsbeschreibung</label>
-    <textarea id="condition_description" name="condition_description" rows="3">{{ values.get('condition_description') or '' }}</textarea>
-
-    <label for="included_accessories">Lieferumfang</label>
-    <textarea id="included_accessories" name="included_accessories" rows="2" placeholder="Box, Papiere, Zubehör …">{{ values.get('included_accessories') or '' }}</textarea>
+    <input id="condition" name="condition" maxlength="80" placeholder="z. B. Sehr gut" value="{{ values.get('condition') or '' }}">
+    {% if errors.get("condition") %}<span class="field-error">{{ errors.condition }}</span>{% endif %}
 
     <label for="box">Box</label>
     <select id="box" name="box">
@@ -89,14 +129,37 @@
   </fieldset>
 
   <fieldset>
-    <legend>Beschreibung & technische Daten</legend>
-    <label for="description">Beschreibung (eigener Text)</label>
-    <textarea id="description" name="description" rows="6">{{ values.get('description') or '' }}</textarea>
-
-    <label for="specs_text">Technische Daten (eine Angabe pro Zeile: <code>Schlüssel: Wert</code>)</label>
-    <textarea id="specs_text" name="specs_text" rows="5" placeholder="Kaliber: Automatik&#10;Gehäusedurchmesser: 40 mm">{{ values.get('specs_text') or '' }}</textarea>
-    {% if errors.get("specs_text") %}<span class="field-error">{{ errors.specs_text }}</span>{% endif %}
+    <legend>Technische Daten (Haken = Feld ist Pflicht)</legend>
+    {% for key, label in spec_fields %}
+    <div class="spec-row">
+      <label class="checkbox">
+        <input type="checkbox" name="spec_on_{{ key }}" data-spec-toggle
+               {% if values.get('spec_values', {}).get(key) or (errors.get('spec_' ~ key) and values.get('spec_values', {}).get(key)) %}checked{% elif values.get('spec_values', {}).get(key) %}checked{% endif %}> {{ label }}
+      </label>
+      <input name="spec_{{ key }}" maxlength="200" placeholder="{{ label }} eintragen"
+             value="{{ values.get('spec_values', {}).get(key, '') }}"
+             data-spec-input
+             {% if not values.get('spec_values', {}).get(key) and not errors.get('spec_' ~ key) %}data-disabled="1"{% endif %}>
+      {% if errors.get('spec_' ~ key) %}<span class="field-error">{{ errors['spec_' ~ key] }}</span>{% endif %}
+    </div>
+    {% endfor %}
+    {% if key == "werk" %}
+    <datalist id="werk-suggestions">
+      <option value="Automatik"></option><option value="Handaufzug"></option><option value="Quarz"></option>
+    </datalist>
+    {% endif %}
   </fieldset>
+
+  {% if not watch %}
+  <fieldset>
+    <legend>Fotos (direkt mit anlegen)</legend>
+    <label for="files">Fotos (Mehrfachauswahl möglich)</label>
+    <input id="files" type="file" name="files" multiple accept="image/jpeg,image/png,image/webp">
+    {% if errors.get("files") %}<span class="field-error">{{ errors.files }}</span>{% endif %}
+    <p class="hint">JPEG/PNG/WebP, mehrere möglich – Originaldateien bleiben unverändert.
+      Danach auf der Uhrenseite sortieren, beschriften und korrigieren.</p>
+  </fieldset>
+  {% endif %}
 
   <fieldset>
     <legend>Intern & Freigaben</legend>

@@ -81,3 +81,64 @@ def format_money(cents: int | None) -> str:
     euros, rest = divmod(cents, 100)
     grouped = f"{euros:,}".replace(",", ".")
     return f"{sign}{grouped},{rest:02d} €"
+
+
+class RateError(ValueError):
+    """Wechselkurs konnte nicht gelesen werden."""
+
+
+# Plausibilitätsgrenze EUR pro USD (Milli-Einheiten): 0.50 … 5.00.
+RATE_MIN_MILLI = 500
+RATE_MAX_MILLI = 5_000
+
+
+def parse_rate(raw: str | None) -> int | None:
+    """Parst einen USD→EUR-Kurs (EUR pro 1 USD) zu Milli-Einheiten.
+
+    Beispiel: „1,0923“ → 1092. Bis zu vier Nachkommastellen.
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip().replace(" ", "")
+    if not text:
+        return None
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(",", ".")
+    if not all(c.isdigit() or c == "." for c in text) or text.count(".") > 1:
+        raise RateError(f"Ungültiger Kurs: {raw!r}")
+    head, _, tail = text.partition(".")
+    if len(tail) > 4:
+        raise RateError("Höchstens vier Nachkommastellen beim Kurs.")
+    if not head:
+        raise RateError(f"Ungültiger Kurs: {raw!r}")
+    try:
+        milli = int(head) * 1000 + int((tail + "000")[:3])
+        extra_digit = int(tail[3]) if len(tail) == 4 else 0
+    except ValueError as exc:
+        raise RateError(f"Ungültiger Kurs: {raw!r}") from exc
+    if extra_digit >= 5:
+        milli += 1  # vierte Nachkommastelle aufrunden
+    if not RATE_MIN_MILLI <= milli <= RATE_MAX_MILLI:
+        raise RateError("Kurs außerhalb des plausiblen Bereichs (0,5000–5,0000).")
+    return milli
+
+
+def format_rate(milli: int | None) -> str:
+    """Milli-Kurs → deutsche Schreibweise (1092 → „1,092“)."""
+    if milli is None:
+        return "—"
+    euros, frac = divmod(milli, 1000)
+    frac_str = f"{frac:03d}".rstrip("0") or "0"
+    return f"{euros},{frac_str}"
+
+
+def usd_to_eur(usd_cents: int | None, rate_milli: int | None) -> int | None:
+    """USD-Cents × Kurs → EUR-Cents (kaufmännische Ganzzahlrundung)."""
+    if usd_cents is None or rate_milli is None:
+        return None
+    return (usd_cents * rate_milli + 500) // 1000

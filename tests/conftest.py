@@ -144,22 +144,31 @@ def png_with_dims(width: int, height: int) -> bytes:
 
 
 def create_watch(client: TestClient, **overrides) -> str:
-    """Legt eine Uhr an und liefert die Watch-ID (aus der Redirect-Location)."""
+    """Legt eine Uhr an und liefert die Watch-ID (aus der Redirect-Location).
+
+    `description` ist kein Formularfeld mehr (bewusst nur noch
+    Wecatalog-Übernahme) und wird deshalb direkt in die DB gesetzt.
+    """
+    description = overrides.pop("description", None)
     data = {
         "title": "Omega Speedmaster Professional",
         "brand": "Omega",
         "model": "Speedmaster Professional",
         "status": "in_germany",
-        "purchase_price": "1.234,56",
-        "extra_costs": "45,10",
-        "extra_costs_note": "Versand+Versicherung",
+        "purchase_price": "1.000,00",
+        "usd_eur_rate": "1,1000",
+        "extra_cost_rows": "2",
+        "extra_cost_amount_0": "45,10",
+        "extra_cost_category_0": "de_dhl",
+        "extra_cost_amount_1": "18,00",
+        "extra_cost_category_1": "wise",
         "target_price": "2.100,00",
         "condition": "Sehr gut",
-        "condition_description": "Leichte Gebrauchsspuren am Band",
-        "included_accessories": "Box, Papiere",
         "shipping_info": "Versicherter Versand DE",
-        "description": "Klassiker mit Hektor-9",
-        "specs_text": "Kaliber: 3861\nGehäuse: 42 mm",
+        "spec_on_kaliber": "on",
+        "spec_kaliber": "3861",
+        "spec_on_gehaeusedurchmesser": "on",
+        "spec_gehaeusedurchmesser": "42 mm",
         "internal_notes": "STRENG-INTERN-Notiz XYZ",
     }
     data.update(overrides)
@@ -169,4 +178,15 @@ def create_watch(client: TestClient, **overrides) -> str:
     location = r.headers["location"]
     match = re.search(r"/watches/([\w-]+)", location)
     assert match, f"Unerwartete Location: {location}"
-    return match.group(1)
+    watch_id = match.group(1)
+    if description is not None:
+        from app.db import make_session_factory
+        from app.models import Watch
+
+        Session = make_session_factory(client.app.state.engine)
+        with Session() as db:
+            watch = db.get(Watch, watch_id)
+            assert watch is not None
+            watch.description = description
+            db.commit()
+    return watch_id

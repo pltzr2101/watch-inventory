@@ -13,7 +13,7 @@ from starlette.responses import HTMLResponse
 
 from .flash import pop_flashes
 from .middleware import CSRF_KEY, SESSION_KEY
-from .money import format_money
+from .money import format_money, format_rate
 from .security import new_csrf_token
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
@@ -24,6 +24,7 @@ _env = Environment(
     auto_reload=True,
 )
 _env.globals["format_money"] = format_money
+_env.globals["format_rate"] = format_rate
 _env.globals["fmt_dt"] = (
     lambda dt: dt.strftime("%Y-%m-%d %H:%M") + " UTC" if dt else "—"
 )

@@ -161,6 +161,28 @@ async def image_move(request: Request, image_id: str, db=DbDep, direction: str =
     )
 
 
+@router.post("/images/{image_id}/reorder", dependencies=_MUTATE)
+async def image_reorder(request: Request, image_id: str, db=DbDep, index: int = Form(...)):
+    """Neue absolute Position (0..n-1) – für Drag & Drop ohne Seitenaufbau."""
+    image = load_image(db, _image_id(image_id))
+    siblings = [
+        item
+        for item in db.scalars(
+            select(WatchImage)
+            .where(WatchImage.watch_id == image.watch_id)
+            .order_by(WatchImage.sort_order, WatchImage.id)
+        ).all()
+        if item.id != image.id
+    ]
+    if not 0 <= index < len(siblings) + 1:
+        raise HTTPException(status_code=400, detail="Ungültige Zielposition.")
+    siblings.insert(index, image)
+    for position, item in enumerate(siblings):
+        item.sort_order = position
+    db.commit()
+    return Response(status_code=303, headers={"location": f"/watches/{image.watch_id}"})
+
+
 @router.post("/images/{image_id}/delete", dependencies=_MUTATE)
 async def image_delete(request: Request, image_id: str, db=DbDep, settings=SettingsDep):
     image = load_image(db, _image_id(image_id))
