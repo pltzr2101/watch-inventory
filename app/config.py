@@ -35,6 +35,17 @@ def _opt_env(name: str, default: str = "") -> str:
     return (os.environ.get(name) or "").strip() or default
 
 
+def fx_rate_url_from_env(raw: str | None) -> str:
+    """FX_RATE_URL: nicht gesetzt → Standarddienst, ausdrücklich leer → deaktiviert.
+
+    Anders als `_opt_env` muss hier ein ausdrücklich leer gesetzter Wert
+    erhalten bleiben – er schaltet den Kursdienst ab.
+    """
+    if raw is None:
+        return "https://api.frankfurter.app/latest?from=USD&to=EUR"
+    return raw.strip()
+
+
 def _int_env(name: str, default: int, min_value: int, max_value: int) -> int:
     raw = (os.environ.get(name) or "").strip()
     if not raw:
@@ -178,7 +189,5 @@ def load_settings() -> Settings:
         watermark_enabled=_bool_env("WATERMARK_ENABLED", False),
         watermark_text=_opt_env("WATERMARK_TEXT")[:80],
         listing_template_dir=listing_template_dir,
-        fx_rate_url=_opt_env(
-            "FX_RATE_URL", "https://api.frankfurter.app/latest?from=USD&to=EUR"
-        ),
+        fx_rate_url=fx_rate_url_from_env(os.environ.get("FX_RATE_URL")),
     )

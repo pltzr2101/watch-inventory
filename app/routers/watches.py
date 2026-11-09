@@ -237,7 +237,7 @@ def usd_rate(settings=SettingsDep):
     try:
         with urllib.request.urlopen(request_obj, timeout=5) as response:  # noqa: S310
             payload = json.loads(response.read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         raise HTTPException(
             status_code=502, detail=f"Kursdienst nicht erreichbar: {exc}"
         ) from exc

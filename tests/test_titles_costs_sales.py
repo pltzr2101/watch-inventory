@@ -266,3 +266,13 @@ def test_reorder_sets_absolute_position(auth_client) -> None:
         assert a is not None and b is not None
         assert b.sort_order == 0
         assert a.sort_order == 1
+
+
+def test_fx_rate_url_env_semantics() -> None:
+    """Nicht gesetzt = Standarddienst, ausdrücklich leer = deaktiviert."""
+    from app.config import fx_rate_url_from_env
+
+    assert fx_rate_url_from_env(None).startswith("https://api.frankfurter.app/")
+    assert fx_rate_url_from_env("") == ""
+    assert fx_rate_url_from_env("   ") == ""
+    assert fx_rate_url_from_env(" https://kurs.example/api ") == "https://kurs.example/api"
