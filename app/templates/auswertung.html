@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}Auswertung – Watch-Inventory{% endblock %}
+{% block content %}
+<style>
+  .wd-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin:16px 0; }
+  .wd-kpi { background:#16191f; border:1px solid #262b35; border-radius:12px; padding:12px 14px; }
+  .wd-kpi .lbl { font-size:11px; color:#8d93a1; text-transform:uppercase; letter-spacing:.05em; }
+  .wd-kpi .val { font-size:23px; font-weight:650; margin-top:5px; font-variant-numeric:tabular-nums; }
+  .wd-kpi .dlt { font-size:12px; margin-top:3px; color:#8d93a1; }
+  .wd-grid { display:grid; grid-template-columns:1.35fr 1fr; gap:14px; }
+  .wd-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+  @media (max-width: 1000px) { .wd-grid, .wd-grid-3 { grid-template-columns:1fr; } }
+  .wd-card { background:#16191f; border:1px solid #262b35; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .wd-card h2 { font-size:13px; margin:0 0 12px; color:#e8b84b; text-transform:uppercase; letter-spacing:.06em; }
+  .wd-chips { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0 4px; }
+  .wd-chip { border:1px solid #262b35; background:#16191f; color:#8d93a1; border-radius:99px;
+             padding:5px 14px; font-size:13px; text-decoration:none; }
+  .wd-chip.on { border-color:#e8b84b; color:#e8b84b; }
+  .wd-bars div.row { display:flex; align-items:center; gap:10px; margin:7px 0; }
+  .wd-bars .nm { width:170px; font-size:13px; color:#8d93a1; flex:none; }
+  .wd-bars .bar { height:24px; border-radius:6px; background:linear-gradient(90deg,#3d6bb3,#6ea8e8);
+                  display:flex; align-items:center; padding:0 9px; font-size:12px; color:#0c1220; font-weight:600; }
+  .wd-bars .ct { font-size:13px; font-variant-numeric:tabular-nums; }
+  table.wd-tbl { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+  .wd-tbl th { font-size:11px; text-transform:uppercase; color:#8d93a1; text-align:left;
+               padding:5px 8px; border-bottom:1px solid #262b35; }
+  .wd-tbl td { padding:7px 8px; border-bottom:1px solid #1e222b; font-size:14px; }
+  .wd-tbl tr:last-child td { border-bottom:0; }
+  .wd-num { text-align:right; }
+  .wd-calc { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width: 860px) { .wd-calc { grid-template-columns:1fr; } }
+  .wd-calc label { display:block; font-size:12px; color:#8d93a1; margin:9px 0 3px; }
+  .wd-calc input, .wd-calc select { width:100%; background:#10131a; border:1px solid #262b35;
+      color:#e7e4dd; border-radius:8px; padding:8px 10px; font-size:15px; font-variant-numeric:tabular-nums; }
+  .wd-seg { display:flex; border:1px solid #262b35; border-radius:9px; overflow:hidden; margin-top:3px; }
+  .wd-seg button { flex:1; background:#10131a; color:#8d93a1; border:0; padding:8px; cursor:pointer; font-size:14px; }
+  .wd-seg button.on { background:#e8b84b; color:#16130a; font-weight:600; }
+  .wd-boxline { display:flex; gap:10px; align-items:center; margin-top:10px; background:#10131a;
+      border:1px solid #262b35; border-radius:9px; padding:9px 11px; }
+  .wd-boxline label { margin:0; flex:1; }
+  .wd-boxline input[type=checkbox] { width:auto; }
+  .wd-boxline input.wd-small { width:100px; }
+  .wd-out { background:#1b1f27; border:1px solid #262b35; border-radius:12px; padding:16px; }
+  .wd-out .main { font-size:40px; font-weight:700; color:#e8b84b; font-variant-numeric:tabular-nums; }
+  .wd-out .cap { font-size:12px; color:#8d93a1; text-transform:uppercase; letter-spacing:.06em; }
+  .wd-out .line { display:flex; justify-content:space-between; border-top:1px solid #262b35;
+      padding:8px 0; font-variant-numeric:tabular-nums; }
+  .wd-ok { color:#5fc98a; } .wd-warn { color:#e0716c; }
+  .wd-note { font-size:12.5px; color:#8d93a1; margin-top:10px; }
+  .wd-btn-sm { border:1px solid #262b35; background:#10131a; color:#e7e4dd; border-radius:8px;
+      padding:7px 12px; font-size:13px; cursor:pointer; margin-top:7px; }
+  .wd-legend { font-size:12px; color:#8d93a1; margin-top:6px; }
+  .wd-dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin:0 5px 0 12px; vertical-align:-1px; }
+</style>
+
+<h1>Auswertung</h1>
+<p class="muted">Interne Verkaufs- und Bestandsauswertung – ausschließlich für angemeldete Nutzer.
+  Haltedauer = Ankunft DE → Verkauf (Fallback: Anlage → Verkauf).</p>
+
+<div class="wd-chips">
+  <strong style="font-size:13px">ZEITRAUM</strong>
+  <a class="wd-chip {{ 'on' if d.period == '30' }}" href="?p=30">30 T</a>
+  <a class="wd-chip {{ 'on' if d.period == '90' }}" href="?p=90">90 T</a>
+  <a class="wd-chip {{ 'on' if d.period == '365' }}" href="?p=365">12 Monate</a>
+  <a class="wd-chip {{ 'on' if d.period == 'all' }}" href="?p=all">Alles</a>
+  <span style="flex:1"></span>
+  <span class="wd-chip" title="Phase 2">Verkauft im Zeitraum: {{ d.kpi.sold_count }}</span>
+</div>
+
+<div class="wd-kpis">
+  <div class="wd-kpi"><div class="lbl">Ø EK / Uhr</div><div class="val">{{ format_money(d.kpi.avg_ek) }}</div>
+    <div class="dlt">Netto-EK im Zeitraum</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø Zusatzkosten / Uhr</div><div class="val">{{ format_money(d.kpi.avg_extra) }}</div>
+    <div class="dlt">alle Kategorien</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø Versicherung / Uhr</div><div class="val">{{ format_money(d.kpi.avg_insurance) }}</div>
+    <div class="dlt">Kategorie enthält „versicher“</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø Versand / Uhr</div><div class="val">{{ format_money(d.kpi.avg_shipping) }}</div>
+    <div class="dlt">Kategorien versand/porto/dhl</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø EK / Box</div><div class="val">{{ format_money(d.kpi.avg_box) }}</div>
+    <div class="dlt">inkl. Bestellversand</div></div>
+  <div class="wd-kpi"><div class="lbl">Box-Bestandswert</div><div class="val">{{ format_money(d.kpi.box_value) }}</div>
+    <div class="dlt">Bestand × Ø je Typ</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø Marge / Stück</div>
+    <div class="val">{{ format_money(d.kpi.avg_margin) }}</div>
+    <div class="dlt">{{ d.kpi.avg_pct }} % vom VK</div></div>
+  <div class="wd-kpi"><div class="lbl">Ø Haltedauer</div><div class="val">{{ d.kpi.avg_held }} T</div>
+    <div class="dlt">Ankunft DE → Verkauf</div></div>
+  <div class="wd-kpi"><div class="lbl">Bestandswert (aktive)</div><div class="val">{{ format_money(d.kpi.stock_value) }}</div>
+    <div class="dlt">{{ d.kpi.stock_count }} Uhren aktiv</div></div>
+  <div class="wd-kpi"><div class="lbl">Verkäufe / Monat</div><div class="val">{{ "%.1f"|format(d.kpi.per_month) }}</div>
+    <div class="dlt">im gewählten Zeitraum</div></div>
+</div>
+
+<div class="wd-grid">
+  <div class="wd-card">
+    <h2>Umsatz &amp; Marge je Monat (12 Monate)</h2>
+    <svg viewBox="0 0 640 240" width="100%" height="240" role="img" aria-label="Umsatz und Marge pro Monat">
+      <g stroke="#262b35" stroke-width="1">
+        <line x1="40" y1="205" x2="620" y2="205"/>
+        <line x1="40" y1="150" x2="620" y2="150" stroke-dasharray="3 5"/>
+        <line x1="40" y1="95" x2="620" y2="95" stroke-dasharray="3 5"/>
+      </g>
+      {% for s in d.series %}
+      <rect x="{{ s.x }}" y="{{ s.bar_y }}" width="28" height="{{ s.bar_h }}" rx="3"
+            fill="#e8b84b" opacity="0.85"><title>{{ s.label }}: {{ format_money(s.umsatz) }}</title></rect>
+      {% endfor %}
+      <polyline fill="none" stroke="#5fc98a" stroke-width="2.5" points="{{ d.chart.line }}"/>
+      {% for s in d.series %}
+      <circle cx="{{ s.mx }}" cy="{{ s.my }}" r="3" fill="#5fc98a">
+        <title>{{ s.label }} Marge: {{ format_money(s.marge) }}</title></circle>
+      <text x="{{ s.mx }}" y="222" fill="#8d93a1" font-size="10" text-anchor="middle">{{ s.label }}</text>
+      {% endfor %}
+    </svg>
+    <div class="wd-legend"><span class="wd-dot" style="background:#e8b84b"></span>Umsatz (€)
+      <span class="wd-dot" style="background:#5fc98a"></span>Marge (€) · Hover zeigt die Werte</div>
+  </div>
+
+  <div class="wd-card">
+    <h2>Wohin fließt der VK? (Ø je verkaufter Uhr)</h2>
+    {% set base = d.kpi.avg_sale if d.kpi.avg_sale > 0 else 1 %}
+    <div class="wd-note" style="margin-top:0">Ø Verkaufspreis: <strong style="color:#e7e4dd">{{ format_money(d.kpi.avg_sale) }}</strong></div>
+    {% for part in d.waterfall %}
+    <div style="margin:10px 0">
+      <div class="wd-note" style="margin:0">{{ part.label }}: {{ format_money(part.cents) }} · {{ part.pct }} %</div>
+      <div style="height:18px;border-radius:5px;margin-top:3px;background:
+        {% if part.label == 'Ø EK' %}#6ea8e8{% elif part.label == 'Ø Zusatzkosten' %}#e8b84b
+        {% elif part.label == 'Ø Box-EK' %}#9b7bd4{% else %}#5fc98a{% endif %};
+        width:{{ part.pct }}%"></div>
+    </div>
+    {% endfor %}
+    <div class="wd-note">Anteile vom Ø-VK; Zusatzkosten-Raster: Ø {{ format_money(d.kpi.avg_extra) }}
+      (Versicherung {{ format_money(d.kpi.avg_insurance) }}, Versand {{ format_money(d.kpi.avg_shipping) }}).</div>
+  </div>
+</div>
+
+<div class="wd-card">
+  <h2>VK-/Margen-Kalkulator – live, ohne Knopf</h2>
+  <div class="wd-calc">
+    <div>
+      <label>Rechenrichtung</label>
+      <div class="wd-seg">
+        <button id="wd-modeM" class="on" type="button">Wunsch-Marge → VK</button>
+        <button id="wd-modeV" type="button">VK eingeben → Marge</button>
+      </div>
+      <label for="wd-ek">Netto-EK Lieferant (EUR)</label>
+      <input id="wd-ek" inputmode="decimal">
+      <button class="wd-btn-sm" type="button" id="wd-preset">Ø-Werte aus Bestand einsetzen</button>
+      <label for="wd-zus">Zusatzkosten gesamt (Versand, Versicherung, Gebühren …)</label>
+      <input id="wd-zus" inputmode="decimal">
+      <div class="wd-boxline">
+        <input id="wd-box" type="checkbox">
+        <label for="wd-box">Mit Box (Ø-EK)</label>
+        <input id="wd-boxk" class="wd-small" inputmode="decimal">
+      </div>
+      <div id="wd-wrapMarge">
+        <label for="wd-marge">Gewünschte Marge (EUR)</label>
+        <input id="wd-marge" inputmode="decimal" value="150,00">
+      </div>
+      <div id="wd-wrapVk" style="display:none">
+        <label for="wd-vk">Verkaufspreis (EUR)</label>
+        <input id="wd-vk" inputmode="decimal" value="450,00">
+      </div>
+      <label for="wd-round">VK-Rundung</label>
+      <select id="wd-round">
+        <option value="1">auf 1 € genau</option>
+        <option value="5" selected>auf 5 € aufrunden</option>
+        <option value="10">auf 10 € aufrunden</option>
+        <option value="25">auf 25 € aufrunden</option>
+      </select>
+    </div>
+    <div class="wd-out">
+      <div id="wd-cap" class="cap">Verkaufspreis-Vorschlag (5er-Rundung)</div>
+      <div id="wd-main" class="main">–</div>
+      <div class="line"><span>Kostenbasis (EK + Zusatz + Box)</span><b id="wd-cost">–</b></div>
+      <div class="line"><span>Resultierende Marge</span><b id="wd-marge-out">–</b></div>
+      <div class="line"><span>Marge in % vom VK</span><b id="wd-pct">–</b></div>
+      <p class="wd-note" id="wd-hint"></p>
+    </div>
+  </div>
+</div>
+
+<div class="wd-grid">
+  <div class="wd-card">
+    <h2>Bestands-Pipeline</h2>
+    <div class="wd-bars">
+      {% for r in d.pipeline %}
+      <div class="row">
+        <span class="nm">{{ r.title }}</span>
+        <div class="bar" style="width:{{ ([r.count * 90 // d.pipe_max, 8]) | max }}%">
+          {{ r.count }} {% if r.count == 1 %}Uhr{% else %}Uhren{% endif %} · {{ format_money(r.eur) }} {{ r.eur_label }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="wd-note">Aktive Zeilen: EK inkl. Zusatzkosten; Verkauft-Zeile: VK im Zeitraum.</p>
+  </div>
+
+  <div class="wd-card">
+    <h2>Top-Margen (Zeitraum)</h2>
+    <table class="wd-tbl">
+      <tr><th>Uhr</th><th class="wd-num">Marge</th><th class="wd-num">%</th></tr>
+      {% for t in d.top %}
+      <tr><td>{{ t.title }}</td><td class="wd-num wd-ok">+{{ format_money(t.margin) }}</td>
+        <td class="wd-num">{{ t.pct }} %</td></tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">Noch keine Verkäufe im Zeitraum.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+
+<script>
+(function () {
+  var seed = {{ d.calc_seed | tojson }};
+  function $(id) { return document.getElementById(id); }
+  function parseDe(s) {
+    if (s == null) return NaN;
+    var t = String(s).trim().replace(/\s/g, "");
+    if (!t) return NaN;
+    if (t.indexOf(",") >= 0 && t.indexOf(".") >= 0) {
+      if (t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
+      else t = t.replace(/,/g, "");
+    } else if (t.indexOf(",") >= 0) t = t.replace(",", ".");
+    return parseFloat(t);
+  }
+  function eur(n) {
+    var neg = n < 0; n = Math.abs(n);
+    var w = Math.floor(n), f = Math.round((n - w) * 100);
+    if (f === 100) { w += 1; f = 0; }
+    var ws = String(w).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (neg ? "−" : "") + ws + "," + String(f).padStart(2, "0") + " €";
+  }
+  var mode = "marge";
+  function setMode(m) {
+    mode = m;
+    $("wd-modeM").classList.toggle("on", m === "marge");
+    $("wd-modeV").classList.toggle("on", m === "vk");
+    $("wd-wrapMarge").style.display = m === "marge" ? "" : "none";
+    $("wd-wrapVk").style.display = m === "vk" ? "" : "none";
+    calc();
+  }
+  function preset() {
+    $("wd-ek").value = eur((seed.ek || 0) / 100);
+    $("wd-zus").value = eur((seed.extra || 0) / 100);
+    $("wd-boxk").value = eur((seed.box || 0) / 100);
+    calc();
+  }
+  function calc() {
+    var ek = parseDe($("wd-ek").value) || 0;
+    var zus = parseDe($("wd-zus").value) || 0;
+    var boxOn = $("wd-box").checked;
+    var box = boxOn ? (parseDe($("wd-boxk").value) || 0) : 0;
+    var cost = ek + zus + box;
+    var step = parseFloat($("wd-round").value) || 1;
+    $("wd-cost").textContent = eur(cost);
+    if (mode === "marge") {
+      var w = parseDe($("wd-marge").value) || 0;
+      var raw = cost + w;
+      var vk = step === 1 ? Math.round(raw * 100) / 100 : Math.ceil(raw / step) * step;
+      var marge = vk - cost;
+      var pct = vk > 0 ? (marge / vk * 100) : 0;
+      $("wd-cap").textContent = "Verkaufspreis-Vorschlag (" +
+        (step === 1 ? "genau" : step + "er-Rundung") + ")";
+      $("wd-main").textContent = eur(vk);
+      $("wd-marge-out").textContent = eur(marge);
+      $("wd-marge-out").className = marge >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-pct").textContent = pct.toFixed(1).replace(".", ",") + " %";
+      $("wd-hint").textContent = step === 1
+        ? "Exakter VK für Wunschmarge " + eur(w) + "."
+        : "Gerundet aufwärts auf die " + step + " → echte Marge " + eur(marge) +
+          " statt " + eur(w) + ". Ohne Rundung: " + eur(raw) + ".";
+    } else {
+      var vk = parseDe($("wd-vk").value) || 0;
+      var m = vk - cost;
+      var p = vk > 0 ? (m / vk * 100) : 0;
+      $("wd-cap").textContent = "Marge bei VK " + eur(vk);
+      $("wd-main").textContent = eur(m);
+      $("wd-main").style.color = m >= 0 ? "#5fc98a" : "#e0716c";
+      $("wd-marge-out").textContent = eur(m);
+      $("wd-marge-out").className = m >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-pct").textContent = p.toFixed(1).replace(".", ",") + " %";
+      $("wd-hint").textContent = "Zum Vergleich: bei 150 € Marge müsste der VK " +
+        eur(cost + 150) + " lauten" +
+        (step > 1 ? " (gerundet " + eur(Math.ceil((cost + 150) / step) * step) + ")" : "") + ".";
+    }
+  }
+  $("wd-modeM").addEventListener("click", function () { setMode("marge"); });
+  $("wd-modeV").addEventListener("click", function () { setMode("vk"); });
+  $("wd-preset").addEventListener("click", preset);
+  ["wd-ek", "wd-zus", "wd-boxk", "wd-marge", "wd-vk"].forEach(function (id) {
+    $(id).addEventListener("input", calc);
+  });
+  $("wd-box").addEventListener("change", calc);
+  $("wd-round").addEventListener("change", calc);
+  preset();
+  setMode("marge");
+})();
+</script>
+{% endblock %}

@@ -7,16 +7,16 @@ Verkaufsangaben).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 
 from ..csrf import verify_csrf
-from ..deps import DbDep
+from ..deps import DbDep, SettingsDep
 from ..flash import flash
 from ..forms import MoneyError, parse_money
 from ..models import BoxPurchase, BoxType, new_id, utcnow
-from ..money import format_money
+from ..money import RateError, format_money, format_rate, parse_rate, usd_to_eur
 from ..services.boxes import overview, unit_cost
 from ..templating import render
 
@@ -40,8 +40,11 @@ def _recent_purchases(db) -> list[dict]:  # type: ignore[no-untyped-def]
             "bought_at": p.bought_at,
             "type_label": label,
             "quantity": p.quantity,
-            "total_cost_cents": p.total_cost_cents,
-            "unit": unit_cost(p.quantity, p.total_cost_cents),
+            "goods_cents": p.total_cost_cents,
+            "shipping_cents": p.shipping_cents or 0,
+            "unit": unit_cost(p.quantity, p.total_cost_cents, p.shipping_cents or 0),
+            "currency": p.currency or "EUR",
+            "rate": format_rate(p.rate_milli) if p.rate_milli else None,
             "note": p.note,
         }
         for p, label in rows
@@ -69,6 +72,10 @@ async def box_purchase_new(request: Request, db=DbDep):
     if box_type.archived_at is not None:
         flash(request, f"Typ archiviert: {box_type.label} – zuerst aktivieren.", "error")
         return _redirect()
+    currency = str(form.get("currency") or "EUR").upper().strip()
+    if currency not in ("EUR", "CNY"):
+        flash(request, "Währung nur EUR oder CNY.", "error")
+        return _redirect()
     try:
         quantity = int(str(form.get("quantity") or "0"))
     except ValueError:
@@ -77,29 +84,64 @@ async def box_purchase_new(request: Request, db=DbDep):
         flash(request, "Menge muss zwischen 1 und 9999 liegen.", "error")
         return _redirect()
     try:
-        total = parse_money(str(form.get("total_cost") or ""))
+        goods = parse_money(str(form.get("total_cost") or ""))
     except MoneyError as exc:
-        flash(request, f"Gesamtpreis: {exc}", "error")
+        flash(request, f"Warenwert: {exc}", "error")
         return _redirect()
-    if total is None or total <= 0:
-        flash(request, "Gesamtpreis fehlt oder ist <= 0.", "error")
+    if goods is None or goods <= 0:
+        flash(request, "Warenwert fehlt oder ist <= 0.", "error")
         return _redirect()
+    try:
+        shipping = parse_money(str(form.get("shipping_cost") or "") or "0")
+    except MoneyError as exc:
+        flash(request, f"Versand der Bestellung: {exc}", "error")
+        return _redirect()
+    shipping = shipping or 0
+    if shipping < 0:
+        flash(request, "Versand darf nicht negativ sein.", "error")
+        return _redirect()
+
+    rate = None
+    if currency == "CNY":
+        try:
+            # CNY→EUR liegt typisch bei ~0,12: eigener plausibler Bereich,
+            # nicht der USD-Standard (0,5–5,0).
+            rate = parse_rate(str(form.get("rate") or ""), min_milli=10, max_milli=5000)
+        except RateError as exc:
+            flash(request, f"Kurs: {exc}", "error")
+            return _redirect()
+        if rate is None:
+            flash(
+                request,
+                "Kurs erforderlich – bei CNY „Kurs holen“ setzen oder EUR wählen.",
+                "error",
+            )
+            return _redirect()
+        goods_eur = usd_to_eur(goods, rate) or 0
+        shipping_eur = usd_to_eur(shipping, rate) or 0
+    else:
+        goods_eur, shipping_eur = goods, shipping
 
     purchase = BoxPurchase(
         box_type_id=box_type.id,
         quantity=quantity,
-        total_cost_cents=total,
+        total_cost_cents=goods_eur,
+        shipping_cents=shipping_eur,
+        currency=currency,
+        rate_milli=rate,
         note=(str(form.get("note") or "").strip()[:80] or None),
         bought_at=utcnow(),
     )
     db.add(purchase)
     db.commit()
-    flash(
-        request,
-        f"Einkauf gespeichert: {quantity}× {box_type.label} für "
-        f"{format_money(total)} (Ø {format_money(unit_cost(quantity, total))}/Box).",
-        "success",
+    msg = (
+        f"Einkauf: {quantity}× {box_type.label} – Ware {format_money(goods_eur)}, "
+        f"Versand {format_money(shipping_eur)} → Ø "
+        f"{format_money(unit_cost(quantity, goods_eur, shipping_eur))}/Box"
     )
+    if currency == "CNY":
+        msg += f" (CNY, Kurs {format_rate(rate)})"
+    flash(request, msg + ".", "success")
     return _redirect()
 
 
@@ -144,3 +186,61 @@ async def box_type_archive(
         )
     db.commit()
     return _redirect()
+
+
+def fx_url_for(base_url: str, cur: str) -> str | None:
+    """FX_RATE_URL-Vorlage → URL für die Währung.
+
+    USD geht direkt; andere Währungen ersetzen `from=USD` in der Vorlage
+    (die Standardfrankfurter-URL enthält sie). Kein Ersatz möglich → None.
+    """
+    if not base_url:
+        return None
+    if cur == "USD":
+        return base_url
+    if "from=USD" in base_url:
+        return base_url.replace("from=USD", f"from={cur}")
+    return None
+
+
+@router.get("/api/fx-rate")
+def fx_rate(cur: str = "USD", settings=SettingsDep):
+    """Aktuellen Kurs (USD/CNY→EUR) als Vorschlag – nur auf Knopfdruck.
+
+    Gleiche Infrastruktur wie der USD-Kurs der Uhren (`FX_RATE_URL`,
+    Standard frankfurter.app); `FX_RATE_URL=""` deaktiviert; Fehler → 502.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    cur = (cur or "USD").upper().strip()
+    if cur not in ("USD", "CNY"):
+        raise HTTPException(status_code=400, detail="Nur USD oder CNY unterstützt.")
+    if not settings.fx_rate_url:
+        raise HTTPException(
+            status_code=404, detail="Kursdienst ist deaktiviert (FX_RATE_URL leer)."
+        )
+    url = fx_url_for(settings.fx_rate_url, cur)
+    if url is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"FX_RATE_URL enthält keine from=USD-Vorlage – {cur} nicht möglich.",
+        )
+    request_obj = urllib.request.Request(  # noqa: S310 – feste konfigurierte URL
+        url, headers={"Accept": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=5) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Kursdienst nicht erreichbar: {exc}"
+        ) from exc
+    try:
+        value = float(payload["rates"]["EUR"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=502, detail="Kursdienst lieferte unerwartete Daten."
+        ) from exc
+    return {"cur": cur, "rate": format_rate(int(round(value * 1000)))}

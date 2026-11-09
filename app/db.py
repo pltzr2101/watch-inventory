@@ -114,6 +114,19 @@ def ensure_schema(engine: Engine) -> None:
                 with contextlib.suppress(Exception):
                     conn.execute(text(ddl))
 
+        box_cols = {c["name"] for c in inspector.get_columns("box_purchases")}
+        for col, ddl in (
+            (
+                "shipping_cents",
+                "ALTER TABLE box_purchases ADD COLUMN shipping_cents INTEGER DEFAULT 0",
+            ),
+            ("currency", "ALTER TABLE box_purchases ADD COLUMN currency VARCHAR(3) DEFAULT 'EUR'"),
+            ("rate_milli", "ALTER TABLE box_purchases ADD COLUMN rate_milli INTEGER"),
+        ):
+            if col not in box_cols:
+                with contextlib.suppress(Exception):
+                    conn.execute(text(ddl))
+
         # Alte Freitexte den Übersetzungsschlüsseln zuordnen (idempotent:
         # bereits zugeordnete Schlüssel werden nicht angefasst; unklare
         # Alttexte wandern intern in condition_note/internal_notes – nichts

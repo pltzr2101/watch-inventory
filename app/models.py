@@ -134,7 +134,13 @@ class BoxPurchase(Base):
         ForeignKey("box_types.id", ondelete="RESTRICT"), index=True
     )
     quantity: Mapped[int] = mapped_column(Integer)
+    # Aufteilung je Bestellung: Warenwert + Versand der Bestellung;
+    # Ø/Box = (Ware + Versand) / Menge (Versand gehört zur Box-Belastung).
     total_cost_cents: Mapped[int] = mapped_column(Integer)
+    shipping_cents: Mapped[int] = mapped_column(Integer, default=0)
+    # Eingabewährung (EUR direkteingabe oder CNY) + Kurs-Snapshot beim Kauf.
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
+    rate_milli: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str | None] = mapped_column(String(80))
     bought_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 

@@ -198,3 +198,107 @@ def test_duplicate_and_archived_type_handling(auth_client) -> None:
         {"unarchive": "1"}, csrf=csrf, follow_redirects=True,
     )
     assert r.status_code == 200
+
+
+# ---------- Aufgeteilter Einkauf (Ware + Versand) & CNY ----------
+
+
+def test_split_purchase_includes_shipping_in_avg(auth_client) -> None:
+    type_id = _make_type(auth_client, "Box D")
+    csrf = csrf_for(auth_client, "/boxes")
+    r = post_form(
+        auth_client,
+        "/boxes/purchases",
+        {"box_type_id": type_id, "quantity": "10",
+         "total_cost": "80,00", "shipping_cost": "40,00", "currency": "EUR"},
+        csrf=csrf, follow_redirects=True,
+    )
+    assert r.status_code == 200
+    # (80 + 40) / 10 = 12,00 € pro Box
+    assert "Ø 12,00 €/Box" in r.text
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        a = next(x for x in overview(db) if x["id"] == type_id)
+        assert a["goods_spend"] == 8000
+        assert a["shipping_spend"] == 4000
+        assert a["total_spend"] == 12000
+        assert a["avg"] == 1200
+    page = auth_client.get("/boxes")
+    assert "40,00" in page.text  # Versand-Spalte sichtbar
+
+
+def test_cny_purchase_converts_and_snapshots_rate(auth_client) -> None:
+    type_id = _make_type(auth_client, "Box CNY")
+    csrf = csrf_for(auth_client, "/boxes")
+    # 620,00 CNY Ware + 314,00 CNY Versand, Kurs 0,127 → 78,74 € + 39,87 €
+    r = post_form(
+        auth_client,
+        "/boxes/purchases",
+        {"box_type_id": type_id, "quantity": "10",
+         "currency": "CNY", "total_cost": "620,00", "shipping_cost": "314,00",
+         "rate": "0,1273"},
+        csrf=csrf, follow_redirects=True,
+    )
+    assert r.status_code == 200, r.text[:300]
+    assert "CNY, Kurs 0,127" in r.text
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        from app.models import BoxPurchase
+
+        p = db.query(BoxPurchase).filter(BoxPurchase.box_type_id == type_id).one()
+        assert p.currency == "CNY"
+        assert p.rate_milli == 127
+        assert p.total_cost_cents == 7874
+        assert p.shipping_cents == 3988  # 314,00 × 0,127 = 39,878 € → 39,88 kaufmännisch
+        a = next(x for x in overview(db) if x["id"] == type_id)
+        # (78,74 + 39,87) / 10 = 11,86 €
+        assert a["avg"] == 1186
+    page = auth_client.get("/boxes")
+    assert "CNY @ 0,127" in page.text
+
+
+def test_cny_without_rate_is_rejected(auth_client) -> None:
+    type_id = _make_type(auth_client, "Box CNY2")
+    csrf = csrf_for(auth_client, "/boxes")
+    r = post_form(
+        auth_client,
+        "/boxes/purchases",
+        {"box_type_id": type_id, "quantity": "5",
+         "currency": "CNY", "total_cost": "500,00"},
+        csrf=csrf, follow_redirects=True,
+    )
+    assert r.status_code == 200
+    assert "Kurs erforderlich" in r.text
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        from app.models import BoxPurchase
+
+        assert db.query(BoxPurchase).filter(BoxPurchase.box_type_id == type_id).count() == 0
+
+
+def test_fx_route_disabled_and_url_template(auth_client) -> None:
+    from app.routers.boxes import fx_url_for
+
+    settings = auth_client.app.state.settings
+
+    # URL-Bauplan ohne Netz: from=USD-Vorlage → jede andere Währung
+    assert fx_url_for("https://x/latest?from=USD&to=EUR", "CNY") == (
+        "https://x/latest?from=CNY&to=EUR"
+    )
+    assert fx_url_for("https://x/latest?from=USD&to=EUR", "USD") == (
+        "https://x/latest?from=USD&to=EUR"
+    )
+    assert fx_url_for("https://x/custom?base=EUR", "CNY") is None
+    assert fx_url_for("", "CNY") is None
+
+    # Deaktivierter Dienst → 404 (kein Netzzugriff im Test)
+    old = settings.fx_rate_url
+    object.__setattr__(settings, "fx_rate_url", "")
+    try:
+        r = auth_client.get("/api/fx-rate?cur=cny")
+        assert r.status_code == 404
+        assert "deaktiviert" in r.text
+        r = auth_client.get("/api/fx-rate?cur=gbp")
+        assert r.status_code == 400
+    finally:
+        object.__setattr__(settings, "fx_rate_url", old)

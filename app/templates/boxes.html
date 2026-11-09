@@ -18,10 +18,23 @@
       {% endfor %}
     </select>
     <input name="quantity" inputmode="numeric" placeholder="Menge (z. B. 10)" required>
-    <input name="total_cost" inputmode="decimal" placeholder="Gesamtpreis (z. B. 80,00)" required>
+    <select name="currency" id="box-cur" aria-label="Eingabewährung">
+      <option value="EUR" selected>EUR</option>
+      <option value="CNY">CNY</option>
+    </select>
+    <input name="total_cost" inputmode="decimal" placeholder="Ware gesamt (z. B. 80,00)" required>
+    <input name="shipping_cost" inputmode="decimal" placeholder="Versand der Bestellung (z. B. 40,00)">
+    <span id="box-rate-group" style="display:none;gap:.4rem;align-items:center">
+      <input name="rate" id="box-rate" inputmode="decimal" placeholder="Kurs CNY→EUR (z. B. 0,127)">
+      <button type="button" class="btn btn-sm" id="box-rate-btn">Kurs holen</button>
+    </span>
     <input name="note" maxlength="80" placeholder="Notiz (optional)">
     <button class="btn btn-primary" type="submit">Einkauf speichern</button>
   </form>
+  <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">
+    Ø/Box = (Ware + Versand der Bestellung) ÷ Menge. Bei CNY: „Kurs holen“ (gleicher
+    Dienst wie der USD-Kurs) – gespeichert werden EUR-Betrag plus Kurs-Snapshot;
+    alternativ EUR direkt eingeben (Kreditkartenbetrag).</p>
   <form method="post" action="/boxes/types" class="row-form" style="margin-top:.5rem">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input name="label" maxlength="80" placeholder="Neuer Box-Typ (z. B. Box A)" required>
@@ -34,8 +47,8 @@
   {% if rows %}
   <table>
     <thead>
-      <tr><th>Typ</th><th>Bestand</th><th>Ø-EK / Box</th><th>Eingekauft</th>
-          <th>Gesamt-EK</th><th>Letzter Kauf</th><th></th></tr>
+      <tr><th>Typ</th><th>Bestand</th><th>Ø-EK / Box</th><th>Menge</th>
+          <th>Ware</th><th>Versand</th><th>Σ</th><th></th></tr>
     </thead>
     <tbody>
       {% for row in rows %}
@@ -44,8 +57,9 @@
         <td>{% if row.stock < 0 %}<span class="tag tag-warn">{{ row.stock }}</span>{% else %}{{ row.stock }}{% endif %}</td>
         <td>{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
         <td>{{ row.purchased }}</td>
-        <td>{{ format_money(row.total_spend) }}</td>
-        <td>{{ fmt_dt(row.last_bought) if row.last_bought else "—" }}</td>
+        <td>{{ format_money(row.goods_spend) }}</td>
+        <td>{{ format_money(row.shipping_spend) }}</td>
+        <td><strong>{{ format_money(row.total_spend) }}</strong></td>
         <td>
           <form method="post" action="/boxes/types/{{ row.id }}/archive" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -69,15 +83,18 @@
 <div class="card">
   <h2>Letzte Einkäufe</h2>
   <table>
-    <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Gesamt</th><th>Ø / Box</th><th>Notiz</th></tr></thead>
+    <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Ware</th><th>Versand</th>
+        <th>Ø / Box</th><th>Währung</th><th>Notiz</th></tr></thead>
     <tbody>
       {% for p in purchases %}
       <tr>
         <td>{{ fmt_dt(p.bought_at) }}</td>
         <td>{{ p.type_label }}</td>
         <td>{{ p.quantity }}</td>
-        <td>{{ format_money(p.total_cost_cents) }}</td>
+        <td>{{ format_money(p.goods_cents) }}</td>
+        <td>{{ format_money(p.shipping_cents) }}</td>
         <td>{{ format_money(p.unit) }}</td>
+        <td>{% if p.currency == "CNY" %}CNY @ {{ p.rate }}{% else %}EUR{% endif %}</td>
         <td>{{ p.note or "—" }}</td>
       </tr>
       {% endfor %}
@@ -85,4 +102,32 @@
   </table>
 </div>
 {% endif %}
+<script>
+(function () {
+  var cur = document.getElementById("box-cur");
+  var group = document.getElementById("box-rate-group");
+  var btn = document.getElementById("box-rate-btn");
+  var rate = document.getElementById("box-rate");
+  if (!cur || !group) return;
+  function sync() { group.style.display = cur.value === "CNY" ? "inline-flex" : "none"; }
+  cur.addEventListener("change", sync);
+  sync();
+  if (btn && rate) {
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      btn.textContent = "…";
+      fetch("/api/fx-rate?cur=cny")
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || String(r.status));
+            return d;
+          });
+        })
+        .then(function (d) { rate.value = d.rate; })
+        .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
+        .then(function () { btn.disabled = false; btn.textContent = "Kurs holen"; });
+    });
+  }
+})();
+</script>
 {% endblock %}

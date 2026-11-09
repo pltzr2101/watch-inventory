@@ -27,6 +27,7 @@ from .middleware import (
     SecurityHeadersMiddleware,
 )
 from .routers import (
+    analytics,
     auth,
     boxes,
     cost_categories,
@@ -101,6 +102,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth.router)
+    app.include_router(analytics.router)
     app.include_router(boxes.router)
     app.include_router(dashboard.router)
     app.include_router(watches.router)

@@ -21,23 +21,26 @@ from ..models import BoxPurchase, BoxType, Watch, WatchStatus
 
 
 def avg_unit_cost(db: Session, box_type_id: str) -> int | None:
-    """Gewichteter Ø-EK pro Box in Cents (kaufmännisch, ganzzahlig)."""
-    total, qty = db.execute(
+    """Gewichteter Ø-EK pro Box inkl. Bestellversand (kaufmännisch)."""
+    total, ship, qty = db.execute(
         select(
             func.coalesce(func.sum(BoxPurchase.total_cost_cents), 0),
+            func.coalesce(func.sum(BoxPurchase.shipping_cents), 0),
             func.coalesce(func.sum(BoxPurchase.quantity), 0),
         ).where(BoxPurchase.box_type_id == box_type_id)
     ).one()
     if int(qty) <= 0:
         return None
-    return (2 * int(total) + int(qty)) // (2 * int(qty))
+    combined = int(total) + int(ship)
+    return (2 * combined + int(qty)) // (2 * int(qty))
 
 
-def unit_cost(quantity: int, total_cents: int) -> int:
-    """Ø eines einzelnen Einkaufs (für die Anzeige)."""
+def unit_cost(quantity: int, total_cents: int, shipping_cents: int = 0) -> int:
+    """Ø eines Einkaufs inkl. Versand (für die Anzeige)."""
     if quantity <= 0:
         return 0
-    return (2 * total_cents + quantity) // (2 * quantity)
+    combined = total_cents + shipping_cents
+    return (2 * combined + quantity) // (2 * quantity)
 
 
 def overview(db: Session) -> list[dict]:
@@ -47,9 +50,10 @@ def overview(db: Session) -> list[dict]:
     ).all()
     rows: list[dict] = []
     for t in types:
-        total, qty, last = db.execute(
+        total, ship, qty, last = db.execute(
             select(
                 func.coalesce(func.sum(BoxPurchase.total_cost_cents), 0),
+                func.coalesce(func.sum(BoxPurchase.shipping_cents), 0),
                 func.coalesce(func.sum(BoxPurchase.quantity), 0),
                 func.max(BoxPurchase.bought_at),
             ).where(BoxPurchase.box_type_id == t.id)
@@ -63,9 +67,10 @@ def overview(db: Session) -> list[dict]:
             or 0
         )
         purchased = int(qty)
+        combined = int(total) + int(ship)
         avg = None
         if purchased > 0:
-            avg = (2 * int(total) + purchased) // (2 * purchased)
+            avg = (2 * combined + purchased) // (2 * purchased)
         rows.append(
             {
                 "id": t.id,
@@ -76,7 +81,9 @@ def overview(db: Session) -> list[dict]:
                 "sold": sold,
                 "stock": purchased - sold,
                 "avg": avg,
-                "total_spend": int(total),
+                "goods_spend": int(total),
+                "shipping_spend": int(ship),
+                "total_spend": combined,
                 "last_bought": last if isinstance(last, datetime) else None,
             }
         )

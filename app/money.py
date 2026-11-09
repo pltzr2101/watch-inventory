@@ -92,7 +92,9 @@ RATE_MIN_MILLI = 500
 RATE_MAX_MILLI = 5_000
 
 
-def parse_rate(raw: str | None) -> int | None:
+def parse_rate(
+    raw: str | None, *, min_milli: int = 500, max_milli: int = 5000
+) -> int | None:
     """Parst einen USD→EUR-Kurs (EUR pro 1 USD) zu Milli-Einheiten.
 
     Beispiel: „1,0923“ → 1092. Bis zu vier Nachkommastellen.
@@ -123,8 +125,11 @@ def parse_rate(raw: str | None) -> int | None:
         raise RateError(f"Ungültiger Kurs: {raw!r}") from exc
     if extra_digit >= 5:
         milli += 1  # vierte Nachkommastelle aufrunden
-    if not RATE_MIN_MILLI <= milli <= RATE_MAX_MILLI:
-        raise RateError("Kurs außerhalb des plausiblen Bereichs (0,5000–5,0000).")
+    if not min_milli <= milli <= max_milli:
+        raise RateError(
+            "Kurs außerhalb des plausiblen Bereichs "
+            f"({format_rate(min_milli)}–{format_rate(max_milli)})."
+        )
     return milli
 
 
