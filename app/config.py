@@ -80,6 +80,7 @@ class Settings:
     data_dir: Path
     session_secret: str
     admin_password_hash: str
+    app_username: str = "admin"
     operator_id: str = "operator"
     cookie_secure: bool = False
     cookie_max_age_seconds: int = 12 * 60 * 60
@@ -167,6 +168,7 @@ def load_settings() -> Settings:
         data_dir=data_dir,
         session_secret=session_secret,
         admin_password_hash=admin_password_hash,
+        app_username=_opt_env("APP_USERNAME", "admin") or "admin",
         cookie_secure=_bool_env("COOKIE_SECURE", False),
         cookie_max_age_seconds=_int_env(
             "COOKIE_MAX_AGE_SECONDS", 12 * 60 * 60, 300, 60 * 60 * 24 * 30

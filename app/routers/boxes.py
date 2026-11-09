@@ -244,3 +244,84 @@ def fx_rate(cur: str = "USD", settings=SettingsDep):
             status_code=502, detail="Kursdienst lieferte unerwartete Daten."
         ) from exc
     return {"cur": cur, "rate": format_rate(int(round(value * 1000)))}
+
+
+@router.post("/boxes/purchases/{purchase_id}", dependencies=_MUTATE)
+async def box_purchase_edit(request: Request, purchase_id: int, db=DbDep):
+    """Einkauf nachträglich bearbeiten (z. B. Versandkosten später ergänzen).
+
+    Währung/Kurs bleiben unveränderlich (Snapshot-Charakter); bei CNY werden
+    die Eingaben wie beim Anlegen in EUR umgerechnet. Verkaufs-Snapshots
+    bereits verkaufter Uhren bleiben unangetastet.
+    """
+    purchase = db.get(BoxPurchase, purchase_id)
+    if purchase is None:
+        flash(request, "Einkauf fehlt.", "error")
+        return _redirect()
+    form = await request.form()
+    try:
+        quantity = int(str(form.get("quantity") or "0"))
+    except ValueError:
+        quantity = 0
+    if quantity < 1 or quantity > 9999:
+        flash(request, "Menge muss zwischen 1 und 9999 liegen.", "error")
+        return _redirect()
+    try:
+        goods = parse_money(str(form.get("total_cost") or ""))
+    except MoneyError as exc:
+        flash(request, f"Warenwert: {exc}", "error")
+        return _redirect()
+    if goods is None or goods <= 0:
+        flash(request, "Warenwert fehlt oder ist <= 0.", "error")
+        return _redirect()
+    try:
+        shipping = parse_money(str(form.get("shipping_cost") or "") or "0")
+    except MoneyError as exc:
+        flash(request, f"Versand: {exc}", "error")
+        return _redirect()
+    shipping = shipping or 0
+    if shipping < 0:
+        flash(request, "Versand darf nicht negativ sein.", "error")
+        return _redirect()
+
+    if purchase.currency == "CNY":
+        rate = purchase.rate_milli or 1000
+        goods_eur = usd_to_eur(goods, rate) or 0
+        shipping_eur = usd_to_eur(shipping, rate) or 0
+    else:
+        goods_eur, shipping_eur = goods, shipping
+
+    purchase.quantity = quantity
+    purchase.total_cost_cents = goods_eur
+    purchase.shipping_cents = shipping_eur
+    purchase.note = str(form.get("note") or "").strip()[:80] or None
+    db.commit()
+    flash(
+        request,
+        f"Einkauf aktualisiert: {quantity}× – Ware {format_money(goods_eur)}, "
+        f"Versand {format_money(shipping_eur)} → Ø "
+        f"{format_money(unit_cost(quantity, goods_eur, shipping_eur))}/Box.",
+        "success",
+    )
+    return RedirectResponse(
+        url=f"/boxes?edit={purchase.id}#kauf-{purchase.id}", status_code=303
+    )
+
+
+@router.post("/boxes/purchases/{purchase_id}/delete", dependencies=_MUTATE)
+async def box_purchase_delete(request: Request, purchase_id: int, db=DbDep):
+    purchase = db.get(BoxPurchase, purchase_id)
+    if purchase is None:
+        flash(request, "Einkauf fehlt.", "error")
+        return _redirect()
+    label = purchase.box_type.label if purchase.box_type else "?"
+    summary = f"{purchase.quantity}× {label}"
+    db.delete(purchase)
+    db.commit()
+    flash(
+        request,
+        f"Einkauf gelöscht: {summary} – Ø-EK und Bestand des Typs neu berechnet. "
+        "Snapshots bereits verkaufter Uhren bleiben unverändert.",
+        "success",
+    )
+    return _redirect()

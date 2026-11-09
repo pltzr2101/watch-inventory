@@ -23,6 +23,7 @@ os.environ.pop("LISTING_TEMPLATE_DIR", None)
 from app.security import hash_password  # noqa: E402  (nach Env-Setup)
 
 TEST_PASSWORD = "test-passw0rd-123"
+TEST_USERNAME = os.environ.get("APP_USERNAME", "admin")
 os.environ["ADMIN_PASSWORD_HASH"] = hash_password(TEST_PASSWORD)
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -68,7 +69,12 @@ def login(client: TestClient) -> None:
     token = extract_csrf(r.text)
     r = client.post(
         "/login",
-        data={"password": TEST_PASSWORD, "csrf_token": token, "next_to": "/"},
+        data={
+            "username": TEST_USERNAME,
+            "password": TEST_PASSWORD,
+            "csrf_token": token,
+            "next_to": "/",
+        },
         follow_redirects=False,
     )
     assert r.status_code == 303, f"Login fehlgeschlagen: {r.status_code} {r.text[:300]}"

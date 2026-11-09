@@ -45,7 +45,7 @@
 <div class="card">
   <h2>Bestand</h2>
   {% if rows %}
-  <table>
+  <table class="tbl-stack">
     <thead>
       <tr><th>Typ</th><th>Bestand</th><th>Ø-EK / Box</th><th>Menge</th>
           <th>Ware</th><th>Versand</th><th>Σ</th><th></th></tr>
@@ -53,15 +53,16 @@
     <tbody>
       {% for row in rows %}
       <tr{% if row.archived_at %} class="muted"{% endif %}>
-        <td>{{ row.label }}{% if row.archived_at %} <span class="tag">archiviert</span>{% endif %}</td>
-        <td>{% if row.stock < 0 %}<span class="tag tag-warn">{{ row.stock }}</span>{% else %}{{ row.stock }}{% endif %}</td>
-        <td>{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
-        <td>{{ row.purchased }}</td>
-        <td>{{ format_money(row.goods_spend) }}</td>
-        <td>{{ format_money(row.shipping_spend) }}</td>
-        <td><strong>{{ format_money(row.total_spend) }}</strong></td>
-        <td>
-          <form method="post" action="/boxes/types/{{ row.id }}/archive" style="display:inline">
+        <td data-label="Typ">{{ row.label }}{% if row.archived_at %} <span class="tag">archiviert</span>{% endif %}</td>
+        <td data-label="Bestand">{% if row.stock < 0 %}<span class="tag tag-warn">{{ row.stock }}</span>{% else %}{{ row.stock }}{% endif %}</td>
+        <td data-label="Ø-EK / Box">{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
+        <td data-label="Menge">{{ row.purchased }}</td>
+        <td data-label="Ware">{{ format_money(row.goods_spend) }}</td>
+        <td data-label="Versand">{{ format_money(row.shipping_spend) }}</td>
+        <td data-label="Σ"><strong>{{ format_money(row.total_spend) }}</strong></td>
+        <td class="td-act">
+          <form method="post" action="/boxes/types/{{ row.id }}/archive" class="act-form"
+                data-confirm="{{ 'Box-Typ reaktivieren?' if row.archived_at else 'Box-Typ archivieren? Bestand und Einkäufe bleiben erhalten.' }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if row.archived_at %}
             <button class="btn btn-xs" name="unarchive" value="1" type="submit">Aktivieren</button>
@@ -82,20 +83,54 @@
 {% if purchases %}
 <div class="card">
   <h2>Letzte Einkäufe</h2>
-  <table>
+  <table class="tbl-stack">
     <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Ware</th><th>Versand</th>
-        <th>Ø / Box</th><th>Währung</th><th>Notiz</th></tr></thead>
+        <th>Ø / Box</th><th>Währung</th><th>Notiz</th><th>Aktionen</th></tr></thead>
     <tbody>
       {% for p in purchases %}
-      <tr>
-        <td>{{ fmt_dt(p.bought_at) }}</td>
-        <td>{{ p.type_label }}</td>
-        <td>{{ p.quantity }}</td>
-        <td>{{ format_money(p.goods_cents) }}</td>
-        <td>{{ format_money(p.shipping_cents) }}</td>
-        <td>{{ format_money(p.unit) }}</td>
-        <td>{% if p.currency == "CNY" %}CNY @ {{ p.rate }}{% else %}EUR{% endif %}</td>
-        <td>{{ p.note or "—" }}</td>
+      <tr id="kauf-{{ p.id }}">
+        <td data-label="Wann">{{ fmt_dt(p.bought_at) }}</td>
+        <td data-label="Typ">{{ p.type_label }}</td>
+        <td data-label="Menge">{{ p.quantity }}</td>
+        <td data-label="Ware">{{ format_money(p.goods_cents) }}</td>
+        <td data-label="Versand">{{ format_money(p.shipping_cents) }}</td>
+        <td data-label="Ø / Box">{{ format_money(p.unit) }}</td>
+        <td data-label="Währung">{% if p.currency == "CNY" %}CNY @ {{ p.rate }}{% else %}EUR{% endif %}</td>
+        <td data-label="Notiz">{{ p.note or "—" }}</td>
+        <td class="td-act">
+          <details class="edit-details" id="edit-{{ p.id }}"{% if request.query_params.get("edit") == p.id|string %} open{% endif %}>
+            <summary class="btn btn-xs">Bearbeiten</summary>
+            <form method="post" action="/boxes/purchases/{{ p.id }}" class="edit-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <label>Menge
+                <input name="quantity" inputmode="numeric" value="{{ p.quantity }}" required>
+              </label>
+              <label>Ware gesamt ({{ p.currency }})
+                <input name="total_cost" inputmode="decimal"
+                       value="{{ '%.2f'|format(p.goods_cents / 100)|replace('.', ',') }}" required>
+              </label>
+              <label>Versand der Bestellung (EUR)
+                <input name="shipping_cost" inputmode="decimal"
+                       value="{{ '%.2f'|format(p.shipping_cents / 100)|replace('.', ',') }}">
+              </label>
+              <label>Notiz
+                <input name="note" maxlength="80" value="{{ p.note or '' }}">
+              </label>
+              <p class="muted" style="margin:.2rem 0 .4rem;font-size:.82rem">
+                Währung/Kurs: {% if p.currency == "CNY" %}CNY @ {{ p.rate }} (Kurs-Snapshot, unveränderlich)
+                {% else %}EUR{% endif %} · Änderungen wirken auf Ø-EK/Bestand sofort;
+                gespeicherte Verkaufs-Snapshots bleiben unangetastet.</p>
+              <div class="edit-actions">
+                <button class="btn btn-primary btn-sm" type="submit">Speichern</button>
+              </div>
+            </form>
+          </details>
+          <form method="post" action="/boxes/purchases/{{ p.id }}/delete" class="act-form"
+                data-confirm="Diesen Einkauf ({{ p.quantity }}× {{ p.type_label }}) wirklich löschen?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-xs btn-danger" type="submit">Löschen</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

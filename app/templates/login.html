@@ -8,10 +8,14 @@
   <form method="post" action="/login" autocomplete="on">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="next_to" value="{{ next_to }}">
+    <label for="username">Benutzername</label>
+    <input type="text" id="username" name="username" autocomplete="username"
+           autocapitalize="none" autocorrect="off" spellcheck="false"
+           enterkeyhint="next" required autofocus>
     <label for="password">Passwort</label>
     <input type="password" id="password" name="password" autocomplete="current-password"
            autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go"
-           required autofocus>
+           required>
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">Anmelden</button>
     </div>

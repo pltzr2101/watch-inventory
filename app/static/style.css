@@ -613,3 +613,66 @@ table.wd-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tab
 
 /* Generisch: versteckbare Kurs-/Optionsgruppen (Dashboard-Kalkulator) */
 .wd-hidden { display: none !important; }
+
+/* ===== Mobile (≤ 640px): gestapelte Formulare, Tabellen als Karten ===== */
+@media (max-width: 640px) {
+  h1 { font-size: 1.4rem; }
+  .card { padding: 0.95rem 0.9rem; }
+
+  .row-form { flex-direction: column; align-items: stretch; }
+  .row-form input, .row-form select { width: 100%; box-sizing: border-box; }
+  .row-form .btn { width: 100%; min-height: 44px; justify-content: center; }
+  #box-rate-group { width: 100%; flex-wrap: wrap; }
+  #box-rate { flex: 1 1 8rem; box-sizing: border-box; }
+
+  .btn { min-height: 40px; }
+  .btn-xs { min-height: 36px; padding: 0.35rem 0.7rem; }
+  .form-actions .btn { width: 100%; min-height: 46px; }
+
+  input, select, textarea { font-size: 16px; }
+
+  table.tbl-stack, .tbl-stack tbody, .tbl-stack tr, .tbl-stack td {
+    display: block; width: 100%;
+  }
+  .tbl-stack { table-layout: fixed; }
+  .tbl-stack thead { display: none; }
+  .tbl-stack tr {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+    padding: 0.55rem 0.75rem; margin-bottom: 0.7rem;
+  }
+  .tbl-stack tr.muted { opacity: 0.75; }
+  .tbl-stack td {
+    display: grid; grid-template-columns: 42% 1fr; gap: 0.6rem;
+    padding: 0.34rem 0; border: 0; text-align: left;
+    font-variant-numeric: tabular-nums;
+  }
+  .tbl-stack td::before {
+    content: attr(data-label); color: var(--faint); font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.05em; align-self: center;
+  }
+  .tbl-stack td.td-act {
+    display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+    padding-top: 0.55rem; margin-top: 0.35rem; border-top: 1px dashed var(--line);
+  }
+  .tbl-stack td.td-act::before { content: none; }
+
+  .edit-details { width: 100%; }
+  .edit-details summary { display: inline-block; cursor: pointer; }
+  .edit-form {
+    display: grid; gap: 0.55rem; margin-top: 0.55rem; padding: 0.7rem;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+  }
+  .edit-form label { display: grid; gap: 0.25rem; font-size: 0.82rem; color: var(--muted); }
+  .edit-form input { width: 100%; box-sizing: border-box; }
+  .edit-actions .btn { width: 100%; min-height: 44px; }
+  .act-form { display: block; }
+
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .wd-kpis { gap: 0.6rem; }
+  .wd-kpi .val { font-size: 20px; }
+  .wd-out .main { font-size: 32px; }
+  .wd-bars div.row { flex-wrap: wrap; }
+  .wd-bars .nm { width: auto; min-width: 8rem; }
+  .wd-bars .bar { max-width: 100%; }
+  .wd-seg button { min-height: 42px; }
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.conftest import TEST_PASSWORD, extract_csrf
+from tests.conftest import TEST_PASSWORD, TEST_USERNAME, extract_csrf
 
 PROTECTED_PATHS = [
     "/",
@@ -192,3 +192,37 @@ def test_mangled_password_hash_fails_with_fix_hint(monkeypatch, env) -> None:
     msg = str(exc.value)
     assert "ADMIN_PASSWORD" in msg  # Hinweis auf den Klartext-Weg
     assert "$-Zeichen" in msg  # Ursache genannt
+
+
+def test_login_requires_matching_username(client) -> None:
+    """Zwei-Feld-Login: falscher Benutzername bleibt erfolglos, richtiger
+    passiert – dieselbe Fehlerseite (keine User-Enumeration)."""
+    r = client.get("/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/login",
+        data={
+            "username": "wer-auch-immer",
+            "password": TEST_PASSWORD,
+            "csrf_token": token,
+            "next_to": "/",
+        },
+        follow_redirects=False,
+    )
+    # Login-Fehler liefert 401 mit gerenderter Fehlerseite (kein Session-Cookie)
+    assert r.status_code == 401
+    assert "flash-error" in r.text
+
+    r = client.get("/login")
+    token = extract_csrf(r.text)
+    r = client.post(
+        "/login",
+        data={
+            "username": TEST_USERNAME,
+            "password": TEST_PASSWORD,
+            "csrf_token": token,
+            "next_to": "/",
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303

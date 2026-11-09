@@ -557,3 +557,11 @@ document.addEventListener("change", function (event) {
   preset();
   setMode("marge");
 })();
+
+/* ===== Bestätigungsdialoge per data-confirm (CSP-konform, delegiert) ===== */
+document.addEventListener("submit", function (e) {
+  var f = e.target;
+  if (f && f.dataset && f.dataset.confirm && !window.confirm(f.dataset.confirm)) {
+    e.preventDefault();
+  }
+});

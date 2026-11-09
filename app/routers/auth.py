@@ -28,11 +28,13 @@ def login_page(request: Request):
 @router.post("/login", dependencies=[Depends(verify_csrf)])
 async def login_submit(
     request: Request,
+    username: str = Form(default=""),
     password: str = Form(default=""),
     next_to: str = Form(default="/"),
 ):
     settings = request.app.state.settings
-    if verify_password(settings.admin_password_hash, password):
+    user_ok = username.strip().lower() == settings.app_username.strip().lower()
+    if user_ok and verify_password(settings.admin_password_hash, password):
         request.session.clear()
         request.session[SESSION_KEY] = settings.operator_id
         request.session[CSRF_KEY] = new_csrf_token()

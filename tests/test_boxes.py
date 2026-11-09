@@ -302,3 +302,80 @@ def test_fx_route_disabled_and_url_template(auth_client) -> None:
         assert r.status_code == 400
     finally:
         object.__setattr__(settings, "fx_rate_url", old)
+
+
+def test_purchase_edit_shipping_and_delete(auth_client) -> None:
+    """Versand nachträglich eintragen, Einkauf danach per Button löschen."""
+    from tests.conftest import extract_csrf
+
+    r = auth_client.post(
+        "/boxes/types",
+        data={"label": "T-Edit", "csrf_token": extract_csrf(auth_client.get("/boxes").text)},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    r = auth_client.post(
+        "/boxes/purchases",
+        data={
+            "box_type_id": _type_id(auth_client, "T-Edit"),
+            "quantity": "10",
+            "currency": "EUR",
+            "total_cost": "80,00",
+            "shipping_cost": "0",
+            "csrf_token": extract_csrf(auth_client.get("/boxes").text),
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    from app.db import make_session_factory
+    from app.models import BoxPurchase
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        purchase = db.query(BoxPurchase).order_by(BoxPurchase.id.desc()).first()
+        assert purchase is not None
+        pid = purchase.id
+
+    # Bearbeiten: Versand später hinzufügen
+    r = auth_client.post(
+        f"/boxes/purchases/{pid}",
+        data={
+            "quantity": "10",
+            "total_cost": "80,00",
+            "shipping_cost": "12,50",
+            "note": "nachgetragen",
+            "csrf_token": extract_csrf(auth_client.get("/boxes").text),
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert f"edit={pid}" in r.headers["location"]
+    with Session() as db:
+        purchase = db.get(BoxPurchase, pid)
+        assert purchase is not None
+        assert purchase.shipping_cents == 1250
+        assert purchase.note == "nachgetragen"
+        assert purchase.quantity == 10
+
+    # Löschen (Bestätigungs-Button im UI)
+    page = auth_client.get("/boxes").text
+    assert "wirklich löschen" in page
+    r = auth_client.post(
+        f"/boxes/purchases/{pid}/delete",
+        data={"csrf_token": extract_csrf(auth_client.get("/boxes").text)},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    with Session() as db:
+        assert db.get(BoxPurchase, pid) is None
+
+
+def _type_id(auth_client, label: str) -> str:
+    from app.db import make_session_factory
+    from app.models import BoxType
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        row = db.query(BoxType).filter(BoxType.label == label).one()
+        return str(row.id)
