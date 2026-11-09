@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Boxen – Watch-Inventory{% endblock %}
+{% block content %}
+<h1>Box-Inventar</h1>
+<p class="muted">Bulk-Einkäufe je Box-Typ. <strong>Ø-EK</strong> = gewichteter Durchschnitt
+  aller Einkäufe dieses Typs (bewusst kein FIFO – reicht bei Stapelbestellungen).
+  <strong>Bestand</strong> = eingekaufte Boxen − Boxen bei aktuell als „Verkauft“
+  markierten Uhren. Beim Verkauf wird der Ø-EK als Snapshot gespeichert.</p>
+
+<div class="card">
+  <h2>Einkauf erfassen</h2>
+  <form method="post" action="/boxes/purchases" class="row-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <select name="box_type_id" required aria-label="Box-Typ">
+      <option value="">– Typ –</option>
+      {% for row in rows if not row.archived_at %}
+      <option value="{{ row.id }}">{{ row.label }}</option>
+      {% endfor %}
+    </select>
+    <input name="quantity" inputmode="numeric" placeholder="Menge (z. B. 10)" required>
+    <input name="total_cost" inputmode="decimal" placeholder="Gesamtpreis (z. B. 80,00)" required>
+    <input name="note" maxlength="80" placeholder="Notiz (optional)">
+    <button class="btn btn-primary" type="submit">Einkauf speichern</button>
+  </form>
+  <form method="post" action="/boxes/types" class="row-form" style="margin-top:.5rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="label" maxlength="80" placeholder="Neuer Box-Typ (z. B. Box A)" required>
+    <button class="btn btn-sm" type="submit">Typ anlegen</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Bestand</h2>
+  {% if rows %}
+  <table>
+    <thead>
+      <tr><th>Typ</th><th>Bestand</th><th>Ø-EK / Box</th><th>Eingekauft</th>
+          <th>Gesamt-EK</th><th>Letzter Kauf</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr{% if row.archived_at %} class="muted"{% endif %}>
+        <td>{{ row.label }}{% if row.archived_at %} <span class="tag">archiviert</span>{% endif %}</td>
+        <td>{% if row.stock < 0 %}<span class="tag tag-warn">{{ row.stock }}</span>{% else %}{{ row.stock }}{% endif %}</td>
+        <td>{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
+        <td>{{ row.purchased }}</td>
+        <td>{{ format_money(row.total_spend) }}</td>
+        <td>{{ fmt_dt(row.last_bought) if row.last_bought else "—" }}</td>
+        <td>
+          <form method="post" action="/boxes/types/{{ row.id }}/archive" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if row.archived_at %}
+            <button class="btn btn-xs" name="unarchive" value="1" type="submit">Aktivieren</button>
+            {% else %}
+            <button class="btn btn-xs" type="submit">Archivieren</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Noch keine Box-Typen angelegt – oben „Neuer Box-Typ“ anlegen.</p>
+  {% endif %}
+</div>
+
+{% if purchases %}
+<div class="card">
+  <h2>Letzte Einkäufe</h2>
+  <table>
+    <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Gesamt</th><th>Ø / Box</th><th>Notiz</th></tr></thead>
+    <tbody>
+      {% for p in purchases %}
+      <tr>
+        <td>{{ fmt_dt(p.bought_at) }}</td>
+        <td>{{ p.type_label }}</td>
+        <td>{{ p.quantity }}</td>
+        <td>{{ format_money(p.total_cost_cents) }}</td>
+        <td>{{ format_money(p.unit) }}</td>
+        <td>{{ p.note or "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

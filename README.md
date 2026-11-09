@@ -158,3 +158,24 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
   Archivieren verhindert nur die Neunutzung.
 - Detailseite zeigt je Position Herleitung + EUR-Umrechnung, Summe Zusatz,
   EK gesamt und Marge auf Basis der EUR-Summe (Maximale Transparenz).
+
+### Paket A+B: Sprachfeste Zustands-/Versandwerte & Box-Inventar (V4)
+
+- **Zustand/Versand sind Schlüssel** (`app/texts.py`): Formular-Selects,
+  Speicherung als Key, **Übersetzung je Plattformsprache** im Listing-Generator
+  (`PLATFORM_LANG`: facebook/telegram=de, reddit/reddit_code=en). Alte Freitexte
+  werden beim Start normalisiert („new, fully stickered" → `neu_foliert`);
+  Unklares wandert intern in `condition_note`/`internal_notes` – nichts geht
+  verloren, Anzeigen erfinden nichts. Zusätzliches internes
+  `condition_note`-Feld (nie in Anzeigen).
+- **Box-Inventar** (`/boxes`, Nav „Boxen"): Box-Typen + Bulk-Einkäufe
+  (Menge/Gesamtpreis), **Ø-EK = gewichteter Durchschnitt aller Einkäufe**
+  (bewusst kein FIFO – begründet in `app/services/boxes.py`), Bestand
+  abgeleitet (Einkäufe − verkaufte Uhren mit Box-Typ, Statuswechsel gibt frei).
+- **Verkaufs-Dialog** fragt Verkaufsumfang (mit/ohne Box), Box-Typ (mit
+  Bestandsanzeige) und optionalen **VK-Anteil Box**; beim Setzen auf „Verkauft"
+  wird der Ø-EK als **Snapshot** gespeichert. Detailseite trennt dann
+  **Marge Uhr / Marge Box / Marge gesamt**; ohne Aufteilung Hinweis +
+  Gesamtmarge inkl. Box-EK.
+- Box-EK und Snapshots erscheinen **nie** in Anzeigen- oder ZIP-Kontexten
+  (eigener Test).

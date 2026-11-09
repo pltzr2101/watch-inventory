@@ -315,3 +315,32 @@ def test_empty_file_part_does_not_block_save(auth_client) -> None:
         files={"files": [("", b"", "image/jpeg")]},
     )
     assert r.status_code == 303, r.text[:400]
+
+
+
+def test_freetext_condition_rejected_form_persists_keys(auth_client) -> None:
+    csrf = csrf_for(auth_client, "/watches/new")
+    r = post_form(
+        auth_client,
+        "/watches/new",
+        {"title": "Sprach-Test", "brand": "Test", "status": "in_china",
+         "condition": "Sehr gut, aber freitext"},
+        csrf=csrf,
+    )
+    assert r.status_code == 400
+    assert "Bitte einen Zustand aus der Liste wählen." in r.text
+
+    r = post_form(
+        auth_client,
+        "/watches/new",
+        {"title": "Sprach-Test", "brand": "Test", "status": "in_china",
+         "condition": "neu_foliert", "shipping_info": "dhl_de_incl",
+         "condition_note": "Sticker am Band leicht angestoßen"},
+        csrf=csrf,
+    )
+    assert r.status_code == 303, r.text[:300]
+    watch_id = r.headers["location"].rsplit("/", 1)[-1]
+    detail = auth_client.get(f"/watches/{watch_id}")
+    assert "Neu, vollständig foliert" in detail.text
+    assert "Sticker am Band leicht angestoßen" in detail.text
+    assert "nur intern" in detail.text

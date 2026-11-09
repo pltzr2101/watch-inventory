@@ -148,9 +148,18 @@
 
   <fieldset>
     <legend>Zustand</legend>
-    <label for="condition">Zustand (kurz)</label>
-    <input id="condition" name="condition" maxlength="80" placeholder="z. B. Sehr gut" value="{{ values.get('condition') or '' }}">
+    <label for="condition">Zustand</label>
+    <select id="condition" name="condition">
+      <option value="">— nicht angegeben —</option>
+      {% for key, label in condition_options %}
+      <option value="{{ key }}" {% if values.get('condition') == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
     {% if errors.get("condition") %}<span class="field-error">{{ errors.condition }}</span>{% endif %}
+    <label for="condition_note">Zustand (Notiz, nur intern)</label>
+    <input id="condition_note" name="condition_note" maxlength="120"
+           placeholder="z. B. leichte Kratzer – fließt nie in Anzeigen"
+           value="{{ values.get('condition_note') or '' }}">
 
     <label for="box">Box</label>
     <select id="box" name="box">
@@ -161,8 +170,15 @@
     </select>
     {% if errors.get("box") %}<span class="field-error">{{ errors.box }}</span>{% endif %}
 
-    <label for="shipping_info">Versandinformationen</label>
-    <textarea id="shipping_info" name="shipping_info" rows="2" placeholder="z. B. versicherter Versand innerhalb DE">{{ values.get('shipping_info') or '' }}</textarea>
+    <label for="shipping_info">Versand</label>
+    <select id="shipping_info" name="shipping_info">
+      <option value="">— nicht angegeben —</option>
+      {% for key, label in shipping_options %}
+      <option value="{{ key }}" {% if values.get('shipping_info') == key %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+    <p class="muted" style="margin:.2rem 0 0">Wird in der Anzeige automatisch in der
+      jeweiligen Templatesprache ausgegeben (DE/EN) – kein Freitext mehr.</p>
   </fieldset>
 
   <fieldset>

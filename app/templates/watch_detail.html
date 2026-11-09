@@ -79,10 +79,29 @@
       <dt>Geplanter VK</dt><dd>{{ format_money(watch.target_price_cents) }}</dd>
       <dt>Tatsächlicher VK</dt><dd>{{ format_money(watch.sale_price_cents) }}</dd>
       {% if watch.sold_at %}<dt>Verkauft am</dt><dd>{{ fmt_dt(watch.sold_at) }}</dd>{% endif %}
+      {% if watch.status == "sold" %}
+      <dt>Verkaufsumfang</dt>
+      <dd>{% if watch.box_type %}Uhr + Box ({{ watch.box_type.label }}){% else %}ohne Box{% endif %}</dd>
+      {% if watch.box_type and watch.box_unit_cost_cents is not none %}
+      <dt>Box-EK (Ø, Snapshot)</dt><dd>{{ format_money(watch.box_unit_cost_cents) }}</dd>
+      {% endif %}
+      {% if watch.box_vk_share_cents is not none %}
+      <dt>davon Box-Anteil (VK)</dt><dd>{{ format_money(watch.box_vk_share_cents) }}</dd>
+      {% endif %}
+      {% endif %}
+      {% if margin_uhr_cents is not none %}
+      <dt>Marge Uhr</dt>
+      <dd><strong class="{% if margin_uhr_cents >= 0 %}tag tag-ok{% else %}tag tag-warn{% endif %}"
+          style="font-size:1rem;padding:.25rem .6rem">{{ format_money(margin_uhr_cents) }}</strong></dd>
+      <dt>Marge Box</dt>
+      <dd><strong class="{% if margin_box_cents >= 0 %}tag tag-ok{% else %}tag tag-warn{% endif %}"
+          style="font-size:1rem;padding:.25rem .6rem">{{ format_money(margin_box_cents) }}</strong></dd>
+      {% endif %}
       {% if margin_cents is not none %}
-      <dt>Marge</dt>
+      <dt>Marge{% if margin_uhr_cents is not none %} (gesamt){% endif %}</dt>
       <dd><strong class="{% if margin_cents >= 0 %}tag tag-ok{% else %}tag tag-warn{% endif %}"
           style="font-size:1rem;padding:.25rem .6rem">{{ format_money(margin_cents) }}</strong></dd>
+      {% if margin_note %}<dd class="muted" style="font-size:.85rem">{{ margin_note }}</dd>{% endif %}
       {% endif %}
       <dt>Interne Notizen</dt><dd class="pre">{{ watch.internal_notes or "—" }}</dd>
     </dl>
@@ -92,9 +111,12 @@
   <section class="card">
     <h2>Angaben für Anzeigen</h2>
     <dl class="dl">
-      <dt>Zustand</dt><dd>{{ watch.condition or "—" }}</dd>
+      <dt>Zustand</dt><dd>{{ condition_display or "—" }}</dd>
+      {% if watch.condition_note %}
+      <dt>Zustand (Notiz)</dt><dd>{{ watch.condition_note }} <span class="muted">– nur intern</span></dd>
+      {% endif %}
       <dt>Box</dt><dd>{{ watch.box_label }}</dd>
-      <dt>Versand</dt><dd class="pre">{{ watch.shipping_info or "—" }}</dd>
+      <dt>Versand</dt><dd>{{ shipping_display or "—" }}</dd>
       {% if watch.band %}<dt>Band</dt><dd>{{ watch.band }}</dd>{% endif %}
       {% if watch.highlight %}<dt>Besonderheit</dt><dd>{{ watch.highlight }}</dd>{% endif %}
       <dt>Status seit</dt><dd>{{ fmt_dt(watch.status_changed_at) }}</dd>
@@ -190,6 +212,31 @@
              value="{{ format_money(watch.sale_price_cents).replace(' €', '') if watch.sale_price_cents is not none else '' }}">
       <p class="hint">Pflichtangabe beim Setzen auf „Verkauft“ – Grundlage für Marge und die
         spätere Verkaufsauswertung.</p>
+      <label for="sale_scope">Verkaufsumfang</label>
+      <select id="sale_scope" name="sale_scope">
+        {% with default_scope = "with_box" if watch.box_option in ("box", "optional") else "without_box" %}
+        <option value="with_box" {% if watch.box_type_id or default_scope == "with_box" %}selected{% endif %}>Uhr mit Box</option>
+        <option value="without_box" {% if not watch.box_type_id and default_scope == "without_box" %}selected{% endif %}>Uhr ohne Box</option>
+        {% endwith %}
+      </select>
+      <div data-box-fields>
+        <label for="box_type_id">Box-Typ (Inventar)</label>
+        <select id="box_type_id" name="box_type_id">
+          <option value="">– wählen –</option>
+          {% for bt in box_types %}
+          <option value="{{ bt.id }}" {% if bt.id == watch.box_type_id %}selected{% endif %}>
+            {{- bt.label }} ({{ bt.stock }} auf Lager) -#}
+          </option>
+          {% endfor %}
+        </select>
+        <label for="box_vk_share">VK-Anteil Box (EUR, optional)</label>
+        <input id="box_vk_share" name="box_vk_share" inputmode="decimal"
+               placeholder="z. B. 50,00"
+               value="{{ format_money(watch.box_vk_share_cents).replace(' €', '') if watch.box_vk_share_cents is not none else '' }}">
+        <p class="hint">Teil des Gesamt-VK. Ohne Angabe wird nur die Gesamtmarge
+          (inkl. Ø-Box-EK) ausgewiesen; mit Angabe trennt die Detailseite
+          Marge Uhr und Marge Box.</p>
+      </div>
       <div class="form-actions">
         <button class="btn btn-primary" type="submit">Verkauf speichern</button>
         <button class="btn" type="button" data-sale-cancel>Abbrechen</button>

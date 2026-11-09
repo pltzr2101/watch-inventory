@@ -103,6 +103,44 @@ BOX_OPTIONS: dict[str, str] = {
 }
 
 
+class BoxType(Base):
+    """Box-Typ für das Box-Inventar (Bulk-Einkäufe, Durchschnitts-EK)."""
+
+    __tablename__ = "box_types"
+    __table_args__ = (UniqueConstraint("label", name="uq_box_type_label"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    label: Mapped[str] = mapped_column(String(80))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class BoxPurchase(Base):
+    """Bulk-Einkauf: `quantity` Boxen vom Typ für insgesamt `total_cost_cents`.
+
+    Der EK pro Box ist der gewichtete Durchschnitt aller Einkäufe des Typs
+    (bewusst kein FIFO – siehe Doku; Durchschnitt reicht bei Bulk-Bestellungen).
+    """
+
+    __tablename__ = "box_purchases"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_box_purchase_qty"),
+        CheckConstraint("total_cost_cents >= 0", name="ck_box_purchase_total"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    box_type_id: Mapped[str] = mapped_column(
+        ForeignKey("box_types.id", ondelete="RESTRICT"), index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer)
+    total_cost_cents: Mapped[int] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(String(80))
+    bought_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    box_type: Mapped[BoxType] = relationship()
+
+
 # Startbestand der Kostenkategorien (einmalig in die DB gesät).
 # Kategorien sind DATENBANK-pflegbar: der Nutzer kann auf /cost-categories
 # selbst welche anlegen/umbenennen/archivieren – ohne Codeänderung.
@@ -183,6 +221,16 @@ class Watch(Base):
     # none | box | optional – NULL = nicht angegeben (wird nie geraten).
     box_option: Mapped[str | None] = mapped_column(String(16))
     shipping_info: Mapped[str | None] = mapped_column(Text)
+    # Zustand/Notiz: condition speichert künftig einen Schlüssel aus texts.py;
+    # condition_note ist interne Zusatznotiz und fließt NIE in Anzeigen.
+    condition_note: Mapped[str | None] = mapped_column(String(120))
+    # Verkauf mit Box (Inventar): Snapshots beim Setzen auf „Verkauft“.
+    box_type_id: Mapped[str | None] = mapped_column(
+        ForeignKey("box_types.id", ondelete="SET NULL"), index=True
+    )
+    box_unit_cost_cents: Mapped[int | None] = mapped_column(Integer)
+    box_vk_share_cents: Mapped[int | None] = mapped_column(Integer)
+    box_type: Mapped[BoxType | None] = relationship()
     # Ausschließlich für autorisierte Wecatalog-Übernahmen (nicht im
     # Watch-Formular gepflegt; eigene Beschreibungen entfallen bewusst).
     description: Mapped[str | None] = mapped_column(Text)

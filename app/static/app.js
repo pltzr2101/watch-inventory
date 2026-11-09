@@ -281,6 +281,15 @@ document.addEventListener("change", function (event) {
   if (!dialog || !select) return;
   var saleInput = dialog.querySelector("[name='sale_price']");
   var cancelBtn = dialog.querySelector("[data-sale-cancel]");
+  var scopeSel = dialog.querySelector("[name='sale_scope']");
+  var boxFields = dialog.querySelector("[data-box-fields]");
+  if (scopeSel && boxFields) {
+    var syncBoxFields = function () {
+      boxFields.style.display = scopeSel.value === "with_box" ? "" : "none";
+    };
+    scopeSel.addEventListener("change", syncBoxFields);
+    syncBoxFields();
+  }
   var previous = select.value;
 
   select.addEventListener("change", function () {

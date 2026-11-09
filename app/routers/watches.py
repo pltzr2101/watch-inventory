@@ -18,6 +18,7 @@ from ..forms import (
 )
 from ..models import (
     BOX_OPTIONS,
+    BoxType,
     StatusEvent,
     Watch,
     WatchStatus,
@@ -25,7 +26,10 @@ from ..models import (
 )
 from ..money import MoneyError, format_money, format_percent, format_rate, parse_money, usd_to_eur
 from ..services import image_ingest
+from ..services.boxes import avg_unit_cost
+from ..services.boxes import overview as box_overview
 from ..templating import render
+from ..texts import CONDITION_OPTIONS, SHIPPING_OPTIONS, condition_text, shipping_text
 
 router = APIRouter(tags=["watches"])
 
@@ -118,6 +122,7 @@ def _watch_form_context(
                 else ""
             ),
             "condition": watch.condition or "",
+            "condition_note": watch.condition_note or "",
             "box_option": watch.box_option or "",
             "shipping_info": watch.shipping_info or "",
             "internal_notes": watch.internal_notes or "",
@@ -173,6 +178,8 @@ def _watch_form_context(
         "box_options": BOX_OPTIONS,
         "spec_fields": SPEC_FIELDS,
         "categories": categories,
+        "condition_options": [(k, de) for k, de, _ in CONDITION_OPTIONS],
+        "shipping_options": [(k, de) for k, de, _ in SHIPPING_OPTIONS],
         "watch": watch,
     }
 
@@ -333,9 +340,32 @@ def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep
                 head += " – Kurs fehlt, nicht in Summe enthalten"
         cost_lines.append({"label": c.category_label, "detail": head, "eur_cents": eur})
     total_cost = (watch.purchase_price_cents or 0) + extra_total
+    # Box-Verkauf: Snapshots gelten nur beim tatsächlichen Verkauf.
+    box_ek: int | None = None
+    box_share: int | None = None
+    if watch.status == WatchStatus.SOLD and watch.box_type_id is not None:
+        box_ek = watch.box_unit_cost_cents or 0
+        box_share = watch.box_vk_share_cents
     margin = None
+    margin_uhr: int | None = None
+    margin_box: int | None = None
+    margin_note: str | None = None
     if watch.sale_price_cents is not None and watch.purchase_price_cents is not None:
-        margin = watch.sale_price_cents - total_cost
+        if box_ek is None:
+            margin = watch.sale_price_cents - total_cost
+        else:
+            margin = watch.sale_price_cents - (total_cost + box_ek)
+            if box_share is not None:
+                margin_uhr = (watch.sale_price_cents - box_share) - total_cost
+                margin_box = box_share - box_ek
+            else:
+                margin_note = (
+                    f"inkl. Box-EK (Ø): {format_money(box_ek)} – kein "
+                    "VK-Anteil hinterlegt, daher nur Gesamtmarge"
+                )
+    box_dialog = [
+        row for row in box_overview(db) if row["archived_at"] is None
+    ]
     return render(
         request,
         "watch_detail.html",
@@ -346,6 +376,12 @@ def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep
         extra_total_cents=extra_total,
         total_cost_cents=total_cost if watch.purchase_price_cents is not None else None,
         margin_cents=margin,
+        margin_uhr_cents=margin_uhr,
+        margin_box_cents=margin_box,
+        margin_note=margin_note,
+        condition_display=condition_text(watch.condition) or watch.condition,
+        shipping_display=shipping_text(watch.shipping_info) or watch.shipping_info,
+        box_types=box_dialog,
     )
 
 
@@ -411,12 +447,16 @@ async def watch_status(
     status: str = Form(...),
     note: str = Form(default=""),
     sale_price: str = Form(default=""),
+    sale_scope: str = Form(default=""),
+    box_type_id: str = Form(default=""),
+    box_vk_share: str = Form(default=""),
 ):
     watch = load_watch(db, watch_id)
     try:
         new_status = WatchStatus(status)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Unbekannter Status.") from exc
+    box_low_cost = False
     if new_status == WatchStatus.SOLD:
         try:
             sale = parse_money(sale_price)
@@ -430,9 +470,53 @@ async def watch_status(
                 detail="Endgültiger Verkaufspreis ist beim Setzen auf „Verkauft“ Pflicht.",
             )
         watch.sale_price_cents = sale
+        # Verkaufsumfang: Box kommt aus dem Inventar (Ø-EK als Snapshot).
+        if sale_scope == "with_box":
+            btype = db.get(BoxType, box_type_id.strip()) if box_type_id.strip() else None
+            if btype is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Verkauf mit Box: bitte einen Box-Typ wählen (Inventar: Boxen).",
+                )
+            avg = avg_unit_cost(db, btype.id)
+            watch.box_type_id = btype.id
+            watch.box_unit_cost_cents = avg if avg is not None else 0
+            box_low_cost = avg is None
+        else:
+            watch.box_type_id = None
+            watch.box_unit_cost_cents = None
+            watch.box_vk_share_cents = None
+        if watch.box_type_id is not None and box_vk_share.strip():
+            try:
+                share = parse_money(box_vk_share)
+            except MoneyError as exc:
+                raise HTTPException(status_code=400, detail=f"Box-Anteil VK: {exc}") from exc
+            if share is None:
+                share = None
+            elif share > sale:
+                raise HTTPException(
+                    status_code=400,
+                    detail="VK-Anteil Box darf den Gesamt-Verkaufspreis nicht überschreiten.",
+                )
+            watch.box_vk_share_cents = share
+        elif watch.box_type_id is None:
+            watch.box_vk_share_cents = None
+    else:
+        # Kein Verkauf mehr: Box-Snapshots zurücksetzen (Bestand leitet sich
+        # ohnehin aus status=sold ab – hier bleibt die Anzeige konsistent).
+        watch.box_type_id = None
+        watch.box_unit_cost_cents = None
+        watch.box_vk_share_cents = None
     set_status(watch, new_status, note=note.strip()[:300] or None)
     db.commit()
     flash(request, f"Status → {new_status.label}.", "success")
+    if box_low_cost:
+        flash(
+            request,
+            "Kein Box-Einkauf erfasst – Ø-EK wurde 0 € gesetzt. Bitte Einkauf "
+            "unter „Boxen“ nachtragen.",
+            "warning",
+        )
     return _redirect(f"/watches/{watch.id}")
 
 

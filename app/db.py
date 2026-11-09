@@ -1,6 +1,7 @@
 """Datenbank-Anbindung (SQLite über SQLAlchemy 2.0)."""
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
@@ -100,6 +101,58 @@ def ensure_schema(engine: Engine) -> None:
                     conn.execute(text(ddl))
                 except Exception:  # noqa: BLE001
                     continue
+
+        # ---- V4: Zustand/Versand als Schlüssel + Box-Verkaufs-Spalten ----
+        watch_cols = {c["name"] for c in inspector.get_columns("watches")}
+        for col, ddl in (
+            ("condition_note", "ALTER TABLE watches ADD COLUMN condition_note VARCHAR(120)"),
+            ("box_type_id", "ALTER TABLE watches ADD COLUMN box_type_id VARCHAR(32)"),
+            ("box_unit_cost_cents", "ALTER TABLE watches ADD COLUMN box_unit_cost_cents INTEGER"),
+            ("box_vk_share_cents", "ALTER TABLE watches ADD COLUMN box_vk_share_cents INTEGER"),
+        ):
+            if col not in watch_cols:
+                with contextlib.suppress(Exception):
+                    conn.execute(text(ddl))
+
+        # Alte Freitexte den Übersetzungsschlüsseln zuordnen (idempotent:
+        # bereits zugeordnete Schlüssel werden nicht angefasst; unklare
+        # Alttexte wandern intern in condition_note/internal_notes – nichts
+        # geht verloren, Anzeigen erfinden nichts):
+        from .texts import (
+            is_condition_key,
+            is_shipping_key,
+            normalize_condition,
+            normalize_shipping,
+        )
+
+        rows = conn.execute(
+            text("SELECT id, condition, shipping_info, internal_notes FROM watches")
+        ).fetchall()
+        for wid, cond, ship, notes in rows:
+            updates: dict = {}
+            if cond and not is_condition_key(cond):
+                key = normalize_condition(cond)
+                if key:
+                    updates["condition"] = key
+                else:
+                    updates["condition"] = None
+                    updates["condition_note"] = cond[:120]
+            if ship and not is_shipping_key(ship):
+                key = normalize_shipping(ship)
+                if key:
+                    updates["shipping_info"] = key
+                else:
+                    updates["shipping_info"] = None
+                    old_note = f"Alt-Versand: {ship[:160]}"
+                    updates["internal_notes"] = (
+                        f"{notes}\n{old_note}" if notes else old_note
+                    )
+            if updates:
+                sets = ", ".join(f"{k} = :{k}" for k in updates)
+                params = {"id": wid, **updates}
+                conn.execute(
+                    text(f"UPDATE watches SET {sets} WHERE id = :id"), params
+                )
 
         # Startbestand der Kategorien (einmalig):
         if not conn.execute(text("SELECT 1 FROM cost_categories LIMIT 1")).first():

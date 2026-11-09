@@ -20,6 +20,12 @@ from jinja2 import ChoiceLoader, Environment, FileSystemLoader, StrictUndefined,
 
 from ..models import ListingPlatform, Provenance, Watch
 from ..money import format_money
+from ..texts import (  # noqa: E402
+    CONDITION_OPTIONS,
+    PLATFORM_LANG,
+    SHIPPING_OPTIONS,
+    translated,
+)
 
 DEFAULT_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "listing_templates"
 PLATFORM_LABELS = {
@@ -70,7 +76,7 @@ def listing_approved(watch: Watch) -> bool:
     return bool(watch.import_approved_for_listing)
 
 
-def build_context(watch: Watch) -> dict:
+def build_context(watch: Watch, lang: str = "de") -> dict:
     """Baut den ausschließlich freigegebenen Template-Kontext inkl. Fehlliste."""
     missing: list[str] = []
     approved = listing_approved(watch)
@@ -131,8 +137,14 @@ def build_context(watch: Watch) -> dict:
         "brand": take("brand", "Marke", watch.brand),
         "model": take("model", "Modell", watch.model),
         "price": price_str,
-        "condition": take("condition", "Zustand", watch.condition),
-        "shipping_info": take("shipping_info", "Versandinformationen", watch.shipping_info),
+        "condition": take(
+            "condition", "Zustand", translated(CONDITION_OPTIONS, watch.condition, lang)
+        ),
+        "shipping_info": take(
+            "shipping_info",
+            "Versandinformationen",
+            translated(SHIPPING_OPTIONS, watch.shipping_info, lang),
+        ),
         "description": take("description", "Beschreibung", watch.description),
         "specs": specs_list,
         "factory": factory,
@@ -204,7 +216,7 @@ def generate(watch: Watch, platform: ListingPlatform, settings) -> GeneratedList
     """Erzeugt Titel und Textentwurf aus den tatsächlich gepflegten Daten."""
     if platform not in PLATFORM_LABELS:
         raise ValueError(f"Unbekannte Plattform: {platform}")
-    context = build_context(watch)
+    context = build_context(watch, PLATFORM_LANG.get(platform.value, "de"))
     if context["title"] is None:
         raise ValueError(
             "Kein freigegebener Titel vorhanden – Katalog-Inhalte zuerst bestätigen "

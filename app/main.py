@@ -28,6 +28,7 @@ from .middleware import (
 )
 from .routers import (
     auth,
+    boxes,
     cost_categories,
     dashboard,
     dump,
@@ -100,6 +101,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(auth.router)
+    app.include_router(boxes.router)
     app.include_router(dashboard.router)
     app.include_router(watches.router)
     app.include_router(images.router)

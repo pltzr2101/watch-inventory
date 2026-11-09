@@ -19,6 +19,7 @@ from .money import (
     usd_to_eur,
 )
 from .services.wecatalog import parse_specs  # noqa: F401 – weiterhin Import-Preview/Specs-Text
+from .texts import is_condition_key, is_shipping_key
 
 SKU_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,31}$")
 MAX_TEXT = {
@@ -117,8 +118,19 @@ def parse_watch_form(
     text("version", MAX_TEXT["version"])
     text("band", MAX_TEXT["band"])
     text("highlight", MAX_TEXT["highlight"])
-    text("condition", MAX_TEXT["condition"])
-    text("shipping_info", MAX_LONG)
+    # Zustand/Versand ausschließlich als Übersetzungsschlüssel (texts.py);
+    # die Übersetzung passiert je Plattformsprache im Listing-Generator.
+    condition_raw = str(form.get("condition") or "").strip()
+    if condition_raw and not is_condition_key(condition_raw):
+        errors["condition"] = "Bitte einen Zustand aus der Liste wählen."
+    values["condition"] = condition_raw or None
+    shipping_raw = str(form.get("shipping_info") or "").strip()
+    if shipping_raw and not is_shipping_key(shipping_raw):
+        errors["shipping_info"] = "Bitte eine Versandoption aus der Liste wählen."
+    values["shipping_info"] = shipping_raw or None
+    values["condition_note"] = (
+        str(form.get("condition_note") or "").strip()[:120] or None
+    )
     text("internal_notes", MAX_NOTES)
 
     # Titel setzt sich aus den Bausteinen zusammen; eine manuelle Eingabe
@@ -291,6 +303,7 @@ def apply_watch_values(watch: Watch, values: dict) -> None:
     watch.band = values.get("band")
     watch.highlight = values.get("highlight")
     watch.condition = values.get("condition")
+    watch.condition_note = values.get("condition_note")
     watch.box_option = values.get("box_option")
     watch.shipping_info = values.get("shipping_info")
     watch.internal_notes = values.get("internal_notes")

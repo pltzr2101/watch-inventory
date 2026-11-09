@@ -18,8 +18,8 @@ def test_reddit_and_facebook_generated_from_saved_data(auth_client) -> None:
     assert reddit.status_code == 200
     body = reddit.text
     assert "Omega" in body and "Speedmaster Professional" in body
-    assert "Sehr gut" in body
-    assert "Versicherter Versand DE" in body
+    assert "Very good" in body  # Reddit-Template ist englisch
+    assert "Free DHL shipping within Germany" in body
     assert "2.100,00" in body  # Verkaufspreis darf rein
     assert "3861" in body
     _assert_confidential_free(body, context="Reddit-Seite")
@@ -296,3 +296,33 @@ def test_publication_status_tracking(auth_client) -> None:
     assert r.status_code == 303
     page = auth_client.get(listing_url)
     assert "https://www.reddit.com/r/Test/comments/x/" in page.text
+
+
+
+def test_condition_shipping_translated_per_platform(auth_client) -> None:
+    """Zustand/Versand werden je Plattformsprache übersetzt (DE/EN)."""
+    watch_id = create_watch(auth_client, condition="neu_foliert", shipping_info="dhl_de_incl")
+
+    fb = auth_client.get(f"/watches/{watch_id}/listing?platform=facebook").text
+    assert "Neu, vollständig foliert" in fb
+    assert "New, fully stickered" not in fb
+    assert "Versand innerhalb Deutschlands per DHL inklusive" in fb
+
+    rd = auth_client.get(f"/watches/{watch_id}/listing?platform=reddit").text
+    assert "New, fully stickered" in rd
+    assert "Free DHL shipping within Germany" in rd
+    assert "Neu, vollständig foliert" not in rd
+
+
+def test_normalize_free_texts_from_migration() -> None:
+    from app.texts import normalize_condition, normalize_shipping
+
+    assert normalize_condition("new, fully stickered") == "neu_foliert"
+    assert normalize_condition("Neu, stickered") == "neu_foliert"
+    assert normalize_condition("Sehr gut") == "sehr_gut"
+    assert normalize_condition("gebraucht, getragen") == "gebraucht"
+    assert normalize_condition("Unleserlich") is None
+    assert normalize_shipping("Versand innerhalb DE inklusive") == "dhl_de_incl"
+    assert normalize_shipping("EU nach Absprache") == "eu_by_arrangement"
+    assert normalize_shipping("Weltweiter Versand nach Absprache") == "worldwide_by_arrangement"
+    assert normalize_shipping("Versicherter Versand DE") is None
