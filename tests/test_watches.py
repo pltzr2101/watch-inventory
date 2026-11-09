@@ -30,7 +30,7 @@ def test_create_watch_and_money_persisted(auth_client, env) -> None:
         assert watch.purchase_price_cents == 110_000
         assert len(watch.extra_costs) == 2
         assert watch.extra_costs[0].amount_cents == 4510
-        assert watch.extra_costs[0].category.value == "de_dhl"
+        assert watch.extra_costs[0].category.label == "Versand DHL (DE)"
         assert watch.extra_costs[1].amount_cents == 1800
         assert watch.target_price_cents == 210000
         assert watch.status == WatchStatus.IN_GERMANY

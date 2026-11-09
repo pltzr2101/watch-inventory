@@ -142,3 +142,58 @@ def usd_to_eur(usd_cents: int | None, rate_milli: int | None) -> int | None:
     if usd_cents is None or rate_milli is None:
         return None
     return (usd_cents * rate_milli + 500) // 1000
+
+
+class PercentError(ValueError):
+    """Prozentwert konnte nicht gelesen werden."""
+
+
+def parse_percent(raw: str | None) -> int | None:
+    """Parst Prozent zu Millionstel (6,5 → 6500). Bis zu vier Nachkommastellen.
+
+    Gültig: 0 < Wert ≤ 100. Leer → None.
+    """
+    if raw is None:
+        return None
+    text = str(raw).strip().replace(" ", "").replace("%", "")
+    if not text:
+        return None
+    if "," in text and "." in text:
+        if text.rfind(",") > text.rfind("."):
+            text = text.replace(".", "").replace(",", ".")
+        else:
+            text = text.replace(",", "")
+    elif "," in text:
+        text = text.replace(",", ".")
+    if not all(c.isdigit() or c == "." for c in text) or text.count(".") > 1:
+        raise PercentError(f"Ungültiger Prozentwert: {raw!r}")
+    head, _, tail = text.partition(".")
+    if len(tail) > 4:
+        raise PercentError("Höchstens vier Nachkommastellen beim Prozentwert.")
+    if not head and not tail:
+        raise PercentError(f"Ungültiger Prozentwert: {raw!r}")
+    milli = int(head or "0") * 1000 + int((tail + "000")[:3])
+    if len(tail) == 4 and int(tail[3]) >= 5:
+        milli += 1
+    if milli <= 0:
+        raise PercentError("Prozentwert muss größer als 0 sein.")
+    if milli > 100_000:
+        raise PercentError("Prozentwert maximal 100 %.")
+    return milli
+
+
+def format_percent(milli: int | None) -> str:
+    """Millionstel-Prozent → deutsche Schreibweise (6000 → „6“, 6500 → „6,5“)."""
+    if milli is None:
+        return "—"
+    whole, frac = divmod(milli, 1000)
+    frac_str = f"{frac:03d}".rstrip("0")
+    return f"{whole},{frac_str}" if frac_str else str(whole)
+
+
+def percent_amount(basis_cents: int, percent_milli: int) -> int:
+    """Basis × Prozent → Cents (Ganzzahl, kaufmännisch gerundet).
+
+    percent_milli: 6 % = 6000 → Faktor / 100 000.
+    """
+    return (basis_cents * percent_milli + 50_000) // 100_000

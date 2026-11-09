@@ -8,7 +8,14 @@ from sqlalchemy import or_, select
 from ..csrf import verify_csrf
 from ..deps import DbDep, SettingsDep, load_watch
 from ..flash import flash
-from ..forms import SPEC_FIELDS, apply_watch_values, gen_sku, parse_watch_form
+from ..forms import (
+    SPEC_FIELDS,
+    apply_watch_values,
+    category_choices,
+    category_ids,
+    gen_sku,
+    parse_watch_form,
+)
 from ..models import (
     BOX_OPTIONS,
     StatusEvent,
@@ -16,7 +23,7 @@ from ..models import (
     WatchStatus,
     utcnow,
 )
-from ..money import MoneyError, format_money, parse_money
+from ..money import MoneyError, format_money, format_percent, format_rate, parse_money, usd_to_eur
 from ..services import image_ingest
 from ..templating import render
 
@@ -44,8 +51,23 @@ def set_status(watch: Watch, to_status: WatchStatus, note: str | None = None) ->
         watch.sold_at = None
 
 
-def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) -> dict:
+def _num(cents: int | None) -> str:
+    """Cents → „12,34“ (ohne Währungssuffix)."""
+    if cents is None:
+        return ""
+    whole, frac = divmod(cents, 100)
+    return f"{whole}.{frac:02d}".replace(".", ",")
+
+
+def _watch_form_context(
+    watch: Watch | None,
+    values: dict | None,
+    errors: dict,
+    db,  # type: ignore[no-untyped-def]
+) -> dict:
     from ..money import format_rate
+
+    categories = category_choices(db)
 
     if watch is not None and values is None:
         spec_values: dict[str, str] = {}
@@ -54,7 +76,15 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
                 if str(item.get("key", "")) == label:
                     spec_values[key] = str(item.get("value", ""))
         cost_rows = [
-            (format_money(c.amount_cents).replace(" €", ""), c.category.value)
+            {
+                "category_id": c.category_id,
+                "currency": c.currency,
+                "amount": _num(c.amount_cents),
+                "basis": _num(c.basis_cents),
+                "pct": format_percent(c.percent_milli)
+                if c.percent_milli is not None
+                else "",
+            }
             for c in watch.extra_costs
         ]
         values = {
@@ -101,11 +131,22 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
         v = dict(values or {})
         if "extra_costs" in v:
             cost_rows = [
-                (format_money(amount).replace(" €", ""), category)
-                for amount, category in v["extra_costs"]
+                {
+                    "category_id": c["category_id"],
+                    "currency": c["currency"],
+                    "amount": _num(c["amount_cents"]),
+                    "basis": _num(c.get("basis_cents")),
+                    "pct": format_percent(c["percent_milli"])
+                    if c.get("percent_milli") is not None
+                    else "",
+                }
+                for c in v["extra_costs"]
             ]
         else:
-            cost_rows = [("", "") for _ in range(max(int(v.get("extra_cost_rows") or 1), 1))]
+            cost_rows = [
+                {"category_id": "", "currency": "EUR", "amount": "", "basis": "", "pct": ""}
+                for _ in range(max(int(v.get("extra_cost_rows") or 1), 1))
+            ]
         spec_values = {}
         for item in v.get("specs") or []:
             for key, label in SPEC_FIELDS:
@@ -121,6 +162,7 @@ def _watch_form_context(watch: Watch | None, values: dict | None, errors: dict) 
         "statuses": list(WatchStatus),
         "box_options": BOX_OPTIONS,
         "spec_fields": SPEC_FIELDS,
+        "categories": categories,
         "watch": watch,
     }
 
@@ -167,14 +209,14 @@ def watches_list(
 
 
 @router.get("/watches/new")
-def watch_new_form(request: Request):
-    return render(request, "watch_form.html", **_watch_form_context(None, None, {}))
+def watch_new_form(request: Request, db=DbDep):
+    return render(request, "watch_form.html", **_watch_form_context(None, None, {}, db))
 
 
 @router.post("/watches/new", dependencies=_MUTATE)
 async def watch_new(request: Request, db=DbDep, settings=SettingsDep):
     form = await request.form()
-    values, errors = parse_watch_form(form)
+    values, errors = parse_watch_form(form, category_ids(db))
     # Uploads vollständig VOR dem Datensatz prüfen (kein inkonsistenter Rest):
     prepared, upload_error = await image_ingest.prepare_uploads(form, settings)
     if upload_error:
@@ -184,7 +226,7 @@ async def watch_new(request: Request, db=DbDep, settings=SettingsDep):
             request,
             "watch_form.html",
             status_code=400,
-            **_watch_form_context(None, values, errors),
+            **_watch_form_context(None, values, errors, db),
         )
 
     watch = Watch()
@@ -206,7 +248,8 @@ async def watch_new(request: Request, db=DbDep, settings=SettingsDep):
             "watch_form.html",
             status_code=400,
             **_watch_form_context(
-                None, values, {**errors, "files": "Dateien konnten nicht gespeichert werden."}
+                None, values, {**errors, "files": "Dateien konnten nicht gespeichert werden."},
+            db,
             ),
         )
     db.commit()
@@ -259,7 +302,26 @@ def usd_rate(settings=SettingsDep):
 @router.get("/watches/{watch_id}")
 def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep):
     watch = load_watch(db, watch_id)
-    extra_total = sum(c.amount_cents for c in watch.extra_costs)
+    rate = watch.usd_eur_rate_milli
+    cost_lines: list[dict] = []
+    extra_total = 0
+    for c in watch.extra_costs:
+        eur = usd_to_eur(c.amount_cents, rate) if c.currency == "USD" else c.amount_cents
+        if eur is not None:
+            extra_total += eur
+        if c.percent_milli is not None and c.basis_cents is not None:
+            head = (
+                f"{format_percent(c.percent_milli)} % von {_num(c.basis_cents)} "
+                f"{c.currency} = {_num(c.amount_cents)} {c.currency}"
+            )
+        else:
+            head = f"{_num(c.amount_cents)} {c.currency}"
+        if c.currency == "USD":
+            if eur is not None and rate is not None:
+                head += f" × {format_rate(rate)} = {format_money(eur)}"
+            else:
+                head += " – Kurs fehlt, nicht in Summe enthalten"
+        cost_lines.append({"label": c.category_label, "detail": head, "eur_cents": eur})
     total_cost = (watch.purchase_price_cents or 0) + extra_total
     margin = None
     if watch.sale_price_cents is not None and watch.purchase_price_cents is not None:
@@ -270,6 +332,7 @@ def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep
         watch=watch,
         statuses=list(WatchStatus),
         wecatalog_enabled=settings.wecatalog_enabled,
+        cost_lines=cost_lines,
         extra_total_cents=extra_total,
         total_cost_cents=total_cost if watch.purchase_price_cents is not None else None,
         margin_cents=margin,
@@ -279,20 +342,20 @@ def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep
 @router.get("/watches/{watch_id}/edit")
 def watch_edit_form(request: Request, watch_id: str, db=DbDep):
     watch = load_watch(db, watch_id)
-    return render(request, "watch_form.html", **_watch_form_context(watch, None, {}))
+    return render(request, "watch_form.html", **_watch_form_context(watch, None, {}, db))
 
 
 @router.post("/watches/{watch_id}/edit", dependencies=_MUTATE)
 async def watch_edit(request: Request, watch_id: str, db=DbDep):
     watch = load_watch(db, watch_id)
     form = await request.form()
-    values, errors = parse_watch_form(form)
+    values, errors = parse_watch_form(form, category_ids(db))
     if errors:
         return render(
             request,
             "watch_form.html",
             status_code=400,
-            **_watch_form_context(watch, values, errors),
+            **_watch_form_context(watch, values, errors, db),
         )
 
     apply_watch_values(watch, values)
@@ -306,6 +369,7 @@ async def watch_edit(request: Request, watch_id: str, db=DbDep):
                 watch,
                 values,
                 {**errors, "sale_price": "Endgültiger Verkaufspreis ist für „Verkauft“ Pflicht."},
+            db,
             ),
         )
     if new_status != watch.status:
@@ -319,7 +383,8 @@ async def watch_edit(request: Request, watch_id: str, db=DbDep):
                 "watch_form.html",
                 status_code=400,
                 **_watch_form_context(
-                    watch, values, {**errors, "sku": "Artikelnummer bereits vergeben."}
+                    watch, values, {**errors, "sku": "Artikelnummer bereits vergeben."},
+                db,
                 ),
             )
         watch.sku = values["sku"]

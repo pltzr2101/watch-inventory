@@ -36,7 +36,11 @@ def make_session_factory(engine: Engine) -> sessionmaker:
 
 def ensure_schema(engine: Engine) -> None:
     """Idempotentes Nachrüsten fehlender Spalten (create_all legt nur neue an)."""
+    import uuid
+
     from sqlalchemy import inspect, text
+
+    from .models import DEFAULT_COST_CATEGORIES
 
     inspector = inspect(engine)
     columns = {c["name"] for c in inspector.get_columns("watches")}
@@ -72,10 +76,60 @@ def ensure_schema(engine: Engine) -> None:
         if column in columns:
             statements.append(f"ALTER TABLE watches DROP COLUMN {column}")
 
-    if statements:
-        with engine.begin() as conn:
-            for stmt in statements:
+    with engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception:  # noqa: BLE001 – z. B. alte SQLite ohne DROP COLUMN
+                continue
+
+        # ---- V3 Kosten: Währung, Basis/%, Kategorie-Tabelle ----
+        cost_cols = {c["name"] for c in inspector.get_columns("watch_extra_costs")}
+        for col, ddl in (
+            (
+                "currency",
+                "ALTER TABLE watch_extra_costs ADD COLUMN currency "
+                "VARCHAR(3) NOT NULL DEFAULT 'EUR'",
+            ),
+            ("category_id", "ALTER TABLE watch_extra_costs ADD COLUMN category_id VARCHAR(32)"),
+            ("basis_cents", "ALTER TABLE watch_extra_costs ADD COLUMN basis_cents INTEGER"),
+            ("percent_milli", "ALTER TABLE watch_extra_costs ADD COLUMN percent_milli INTEGER"),
+        ):
+            if col not in cost_cols:
                 try:
-                    conn.execute(text(stmt))
-                except Exception:  # noqa: BLE001 – z. B. alte SQLite ohne DROP COLUMN
+                    conn.execute(text(ddl))
+                except Exception:  # noqa: BLE001
                     continue
+
+        # Startbestand der Kategorien (einmalig):
+        if not conn.execute(text("SELECT 1 FROM cost_categories LIMIT 1")).first():
+            for i, label in enumerate(DEFAULT_COST_CATEGORIES):
+                conn.execute(
+                    text(
+                        "INSERT INTO cost_categories (id, label, sort_order, created_at) "
+                        "VALUES (:id, :label, :sort, CURRENT_TIMESTAMP)"
+                    ),
+                    {"id": uuid.uuid4().hex, "label": label, "sort": i},
+                )
+
+        # Altbestand: Enum-Werte → passende Kategorie-ID (Label-Mapping),
+        # nur solange die alte Spalte existiert (idempotent):
+        if "category" in cost_cols:
+            try:
+                conn.execute(
+                    text(
+                        """UPDATE watch_extra_costs SET category_id = (
+                             SELECT c.id FROM cost_categories c
+                             WHERE c.label = CASE watch_extra_costs.category
+                               WHEN 'china_logistics' THEN 'Versand China'
+                               WHEN 'de_dhl' THEN 'Versand DHL (DE)'
+                               WHEN 'wise' THEN 'Wise-Gebühren'
+                               WHEN 'box' THEN 'Box'
+                               ELSE 'Sonstiges'
+                             END)
+                           WHERE category_id IS NULL"""
+                    )
+                )
+                conn.execute(text("ALTER TABLE watch_extra_costs DROP COLUMN category"))
+            except Exception:  # noqa: BLE001 – Spalte bleibt ggf. liegen
+                pass

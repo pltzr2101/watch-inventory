@@ -139,3 +139,22 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
   (Dialog, serverseitig durchgesetzt); die Detailseite zeigt die Marge je Uhr.
 - Entfallen: Zustandsbeschreibung, Lieferumfang und eigene Beschreibungstexte
   (Beschreibung bleibt ausschließlich als Wecatalog-Übernahmefeld erhalten).
+
+### Kostenpositionen V3 (Währung, Prozent, eigene Kategorien)
+
+- Jede Zusatzkosten-Position: **Kategorie (Dropdown) – Währung (USD/EUR) –
+  Wert ODER Basis × %**. USD-Beträge werden mit dem **einen** historischen
+  Kurs der Uhr (Button „Aktuellen Kurs holen") umgerechnet – der Kurs ist
+  auch dann Pflicht, wenn nur USD-Positionen ohne USD-Einkauf existieren.
+- **Prozent-Modus** (z. B. Versicherung 6 %): Basis × % wird serverseitig in
+  Ganzzahl-Cents gerechnet und in der Detailansicht vollständig hergeleitet
+  (`6 % von 110,00 USD = 6,60 USD × 1,092 = 7,21 €`); Knopf
+  „＋ Versicherung (6 %)" legt eine solche Zeile vor.
+- **Kategorien sind Daten** (Tabelle `cost_categories`, Startbestand inkl.
+  Versand China, Versicherung, Wise-Gebühren, …): unter
+  **„Kostenpositionen → ✎ Kategorien verwalten"** (`/cost-categories`) eigene
+  Kategorien anlegen/umbenennen/archivieren – ohne Codeänderung. Umbenennen
+  wirkt über alle Positionen (saubere Dashboard-Gruppierung später),
+  Archivieren verhindert nur die Neunutzung.
+- Detailseite zeigt je Position Herleitung + EUR-Umrechnung, Summe Zusatz,
+  EK gesamt und Marge auf Basis der EUR-Summe (Maximale Transparenz).

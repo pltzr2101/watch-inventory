@@ -25,7 +25,7 @@ from starlette.datastructures import UploadFile
 from ..csrf import verify_csrf
 from ..deps import DbDep, SettingsDep, load_watch
 from ..flash import flash
-from ..forms import apply_watch_values, gen_sku, parse_watch_form
+from ..forms import apply_watch_values, category_ids, gen_sku, parse_watch_form
 from ..models import (
     ImageSource,
     ImportPreview,
@@ -339,7 +339,7 @@ async def import_confirm(request: Request, preview_id: str, db=DbDep, settings=S
 
     if preview.kind == "new":
         form = await request.form()
-        values, errors = parse_watch_form(form)
+        values, errors = parse_watch_form(form, category_ids(db))
         if errors:
             return render(
                 request,

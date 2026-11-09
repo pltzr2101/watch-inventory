@@ -103,66 +103,137 @@ document.addEventListener("click", function (event) {
   updatePreview();
 })();
 
-// ---------- Uhr-Formular: Zusatzkosten-Zeilen ----------
+// ---------- Uhr-Formular: Kostenpositionen (Kategorie, Währung, Betrag/%) ----------
 (function () {
   var wrap = document.querySelector("[data-cost-rows]");
   var count = document.querySelector("[data-cost-count]");
   var addBtn = document.querySelector("[data-cost-add]");
+  var insBtn = document.querySelector("[data-cost-insurance]");
+  var tpl = document.querySelector("[data-cost-template]");
+  var rateInput = document.querySelector('input[name="usd_eur_rate"]');
   if (!wrap || !count) return;
 
-  var CATEGORIES = [
-    ["", "– Art wählen –"],
-    ["china_logistics", "Versand/Versicherung China"],
-    ["de_dhl", "Versand aus Deutschland (DHL)"],
-    ["wise", "Wise-Gebühren"],
-    ["box", "Box"],
-    ["sonstiges", "Sonstiges"],
-  ];
+  function parseDe(s) {
+    if (!s) return null;
+    var t = String(s).trim().replace(/ /g, "");
+    if (!t) return null;
+    if (t.indexOf(",") >= 0 && t.indexOf(".") >= 0) {
+      if (t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
+      else t = t.replace(/,/g, "");
+    } else if (t.indexOf(",") >= 0) t = t.replace(",", ".");
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    return Math.round(parseFloat(t) * 100);
+  }
+  function parseRate(s) {
+    if (!s) return null;
+    var t = String(s).trim().replace(",", ".");
+    if (!/^\d+(\.\d+)?$/.test(t)) return null;
+    return parseFloat(t);
+  }
+  function fmtCents(cents) {
+    var neg = cents < 0;
+    var abs = Math.abs(cents);
+    return (neg ? "-" : "") + Math.floor(abs / 100) + "," + String(abs % 100).padStart(2, "0");
+  }
+
+  function syncMode(row) {
+    var pct = row.querySelector(".cost-pct");
+    var amount = row.querySelector(".cost-amount");
+    var basis = row.querySelector(".cost-basis");
+    if (!pct || !amount || !basis) return;
+    var hasPct = pct.value.trim() !== "";
+    amount.disabled = hasPct;
+    basis.disabled = !hasPct;
+  }
+  function updatePreview(row) {
+    var out = row.querySelector(".cost-preview");
+    if (!out) return;
+    var cur = (row.querySelector(".cost-cur") || {}).value || "EUR";
+    var pctEl = row.querySelector(".cost-pct");
+    var basisEl = row.querySelector(".cost-basis");
+    var amtEl = row.querySelector(".cost-amount");
+    var cents = null;
+    var parts = [];
+    if (pctEl && pctEl.value.trim() && basisEl && basisEl.value.trim()) {
+      var b = parseDe(basisEl.value);
+      var pp = parseDe(pctEl.value);
+      if (b != null && pp != null && pp > 0) {
+        cents = Math.round((b * pp) / 10000);
+        parts.push(fmtCents(cents) + " " + cur);
+      }
+    } else if (amtEl && amtEl.value.trim()) {
+      cents = parseDe(amtEl.value);
+      if (cents != null) parts.push(fmtCents(cents) + " " + cur);
+    }
+    if (cents != null && cur === "USD" && rateInput) {
+      var rate = parseRate(rateInput.value);
+      if (rate) parts.push("≈ " + fmtCents(Math.round(cents * rate)) + " €");
+    }
+    out.textContent = parts.join("  →  ");
+  }
+  function updateAll() {
+    wrap.querySelectorAll(".cost-row").forEach(function (row) {
+      syncMode(row);
+      updatePreview(row);
+    });
+  }
 
   function renumber() {
     var rows = wrap.querySelectorAll(".cost-row");
     rows.forEach(function (row, i) {
-      var input = row.querySelector("input");
-      var select = row.querySelector("select");
-      input.name = "extra_cost_amount_" + i;
-      select.name = "extra_cost_category_" + i;
+      var map = {
+        ".cost-cat": "extra_cost_category_",
+        ".cost-cur": "extra_cost_currency_",
+        ".cost-amount": "extra_cost_amount_",
+        ".cost-basis": "extra_cost_basis_",
+        ".cost-pct": "extra_cost_pct_",
+      };
+      Object.keys(map).forEach(function (sel) {
+        var el = row.querySelector(sel);
+        if (el) el.name = map[sel] + i;
+      });
     });
     count.value = String(rows.length);
+    updateAll();
   }
 
   function makeRow() {
-    var row = document.createElement("div");
-    row.className = "cost-row";
-    var input = document.createElement("input");
-    input.setAttribute("inputmode", "decimal");
-    input.placeholder = "z. B. 30,00";
-    input.setAttribute("aria-label", "Betrag in Euro");
-    var select = document.createElement("select");
-    select.setAttribute("aria-label", "Art der Kosten");
-    CATEGORIES.forEach(function (pair) {
-      var opt = document.createElement("option");
-      opt.value = pair[0];
-      opt.textContent = pair[1];
-      select.appendChild(opt);
-    });
-    var remove = document.createElement("button");
-    remove.type = "button";
-    remove.className = "btn btn-xs";
-    remove.setAttribute("data-cost-remove", "");
-    remove.setAttribute("aria-label", "Position entfernen");
-    remove.textContent = "✕";
-    row.appendChild(input);
-    row.appendChild(select);
-    row.appendChild(remove);
-    return row;
+    if (!tpl) return null;
+    var frag = tpl.content.cloneNode(true);
+    return frag.querySelector(".cost-row");
   }
 
   if (addBtn) {
     addBtn.addEventListener("click", function () {
-      wrap.appendChild(makeRow());
+      var row = makeRow();
+      if (!row) return;
+      wrap.appendChild(row);
       renumber();
-      var last = wrap.querySelector(".cost-row:last-child input");
-      if (last) last.focus();
+      var first = row.querySelector(".cost-cat");
+      if (first) first.focus();
+    });
+  }
+  if (insBtn) {
+    insBtn.addEventListener("click", function () {
+      var row = makeRow();
+      if (!row) return;
+      var sel = row.querySelector(".cost-cat");
+      if (sel) {
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].textContent.indexOf("Versicherung") === 0) {
+            sel.selectedIndex = i;
+            break;
+          }
+        }
+      }
+      var pct = row.querySelector(".cost-pct");
+      if (pct) pct.value = "6";
+      var cur = row.querySelector(".cost-cur");
+      if (cur) cur.value = "USD";
+      wrap.appendChild(row);
+      renumber();
+      var basis = row.querySelector(".cost-basis");
+      if (basis) basis.focus();
     });
   }
   wrap.addEventListener("click", function (event) {
@@ -171,6 +242,20 @@ document.addEventListener("click", function (event) {
     btn.closest(".cost-row").remove();
     renumber();
   });
+  wrap.addEventListener("input", function (event) {
+    var row = event.target.closest(".cost-row");
+    if (!row) return;
+    syncMode(row);
+    updatePreview(row);
+  });
+  wrap.addEventListener("change", function (event) {
+    var row = event.target.closest(".cost-row");
+    if (!row) return;
+    updatePreview(row);
+  });
+  if (rateInput) rateInput.addEventListener("input", updateAll);
+  var form = wrap.closest("form");
+  if (form) form.addEventListener("submit", updateAll);
   renumber();
 })();
 

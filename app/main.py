@@ -28,6 +28,7 @@ from .middleware import (
 )
 from .routers import (
     auth,
+    cost_categories,
     dashboard,
     dump,
     images,
@@ -106,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(templates_admin.router)
     app.include_router(dump.router)
     app.include_router(imports.router)
+    app.include_router(cost_categories.router)
 
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")

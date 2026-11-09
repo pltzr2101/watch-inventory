@@ -143,6 +143,15 @@ def png_with_dims(width: int, height: int) -> bytes:
     )
 
 
+def cost_category_id(client: TestClient, label: str) -> str:
+    """Liest die Kategorie-ID aus dem frischen Anlage-Formular (DB-Startbestand)."""
+    r = client.get("/watches/new")
+    assert r.status_code == 200, r.status_code
+    m = re.search(rf'value="([0-9a-f]{{32}})">{re.escape(label)}', r.text)
+    assert m, f"Kategorie nicht im Formular gefunden: {label}"
+    return m.group(1)
+
+
 def create_watch(client: TestClient, **overrides) -> str:
     """Legt eine Uhr an und liefert die Watch-ID (aus der Redirect-Location).
 
@@ -159,9 +168,11 @@ def create_watch(client: TestClient, **overrides) -> str:
         "usd_eur_rate": "1,1000",
         "extra_cost_rows": "2",
         "extra_cost_amount_0": "45,10",
-        "extra_cost_category_0": "de_dhl",
+        "extra_cost_currency_0": "EUR",
+        "extra_cost_category_0": cost_category_id(client, "Versand DHL (DE)"),
         "extra_cost_amount_1": "18,00",
-        "extra_cost_category_1": "wise",
+        "extra_cost_currency_1": "EUR",
+        "extra_cost_category_1": cost_category_id(client, "Wise-Gebühren"),
         "target_price": "2.100,00",
         "condition": "Sehr gut",
         "shipping_info": "Versicherter Versand DE",

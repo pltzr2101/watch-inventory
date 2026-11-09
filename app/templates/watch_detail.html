@@ -67,10 +67,10 @@
       {% endif %}
       <dt>Zusatzkosten</dt>
       <dd>
-        {% if watch.extra_costs %}
+        {% if cost_lines %}
         <ul class="spec-list" style="columns:1;padding-left:1.1rem;margin:0">
-          {% for c in watch.extra_costs %}
-          <li><strong>{{ c.category_label }}:</strong> {{ format_money(c.amount_cents) }}</li>
+          {% for line in cost_lines %}
+          <li><strong>{{ line.label }}:</strong> {{ line.detail }}</li>
           {% endfor %}
         </ul>
         {% if extra_total_cents %}<div class="mt"><strong>Summe Zusatz:</strong> {{ format_money(extra_total_cents) }}</div>{% endif %}

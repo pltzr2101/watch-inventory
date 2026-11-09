@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Kostenkategorien – Watch-Inventory{% endblock %}
+{% block content %}
+<h1>Kostenkategorien</h1>
+<p class="muted">Kategorien für die Zusatzkosten im Uhren-Formular. <strong>Umbenennen</strong> wirkt
+  sofort über alle bestehenden Positionen (saubere Gruppierung für spätere Auswertungen);
+  <strong>Archivieren</strong> verhindert nur die Neunutzung – alte Positionen behalten ihre Kategorie.</p>
+
+<div class="card">
+  <h2>Neue Kategorie</h2>
+  <form method="post" action="/cost-categories" class="row-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="label" maxlength="80" placeholder="z. B. Zollgebühren" required>
+    <button class="btn btn-primary" type="submit">Anlegen</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Vorhanden</h2>
+  {% if categories %}
+  <ul class="cat-list">
+    {% for c in categories %}
+    <li class="cat-item{% if c.archived_at %} muted{% endif %}">
+      {% if c.archived_at %}
+      <span class="cat-label">{{ c.label }} <span class="tag">archiviert</span></span>
+      {% else %}
+      <form method="post" action="/cost-categories/{{ c.id }}/rename" class="row-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input name="label" value="{{ c.label }}" maxlength="80" aria-label="Name der Kategorie">
+        <button class="btn btn-sm" type="submit">Umbenennen</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/cost-categories/{{ c.id }}/archive">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% if c.archived_at %}
+        <button class="btn btn-sm" name="unarchive" value="1" type="submit">Wieder aktivieren</button>
+        {% else %}
+        <button class="btn btn-sm" type="submit">Archivieren</button>
+        {% endif %}
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Noch keine Kategorien angelegt.</p>
+  {% endif %}
+</div>
+{% endblock %}

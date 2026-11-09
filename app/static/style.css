@@ -539,3 +539,27 @@ details[open] summary { margin-bottom: 0.4rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+
+/* Kostenpositionen (V3): flexible Zeile mit Kategorie, Währung, Wert/Basis/% */
+.cost-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+.cost-row .cost-cat { flex: 1 1 9rem; min-width: 8rem; }
+.cost-row .cost-cur { flex: 0 0 4.6rem; }
+.cost-row .cost-amount,
+.cost-row .cost-basis { flex: 1 1 5.5rem; min-width: 5rem; }
+.cost-row .cost-pct { flex: 0 0 4.2rem; }
+.cost-row .cost-preview { flex: 1 1 100%; font-size: 0.78rem; }
+@media (min-width: 640px) {
+  .cost-row .cost-preview { flex: 1 1 auto; }
+}
+.cat-list { list-style: none; margin: 0; padding: 0; }
+.cat-item { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border, #333); }
+.cat-item .row-form { display: flex; gap: 0.4rem; flex: 1 1 16rem; }
+.cat-item .row-form input { flex: 1; }
+.row-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }

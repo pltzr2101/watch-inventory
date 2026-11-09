@@ -124,7 +124,7 @@ def test_cost_row_requires_amount_and_category(auth_client) -> None:
 
     r = post_form(auth_client, "/watches/new", {**base, "extra_cost_category_0": ""}, csrf=csrf)
     assert r.status_code == 400
-    assert "Kostenart" in r.text or "extra_cost" in r.text
+    assert "Kategorie" in r.text or "extra_cost" in r.text
 
     r = post_form(
         auth_client,

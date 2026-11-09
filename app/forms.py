@@ -7,8 +7,17 @@ import secrets
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .models import BOX_OPTIONS, ExtraCostCategory, Watch, WatchExtraCost, WatchStatus
-from .money import MoneyError, RateError, parse_money, parse_rate, usd_to_eur
+from .models import BOX_OPTIONS, CostCategory, Watch, WatchExtraCost, WatchStatus
+from .money import (
+    MoneyError,
+    PercentError,
+    RateError,
+    parse_money,
+    parse_percent,
+    parse_rate,
+    percent_amount,
+    usd_to_eur,
+)
 from .services.wecatalog import parse_specs  # noqa: F401 – weiterhin Import-Preview/Specs-Text
 
 SKU_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,31}$")
@@ -63,8 +72,32 @@ def compose_title(
     return title
 
 
-def parse_watch_form(form) -> tuple[dict, dict[str, str]]:  # type: ignore[no-untyped-def]
-    """Validiert ein Watch-Formular → (Werte, Feldfehler)."""
+def category_choices(db) -> list[dict]:  # type: ignore[no-untyped-def]
+    """Alle Kategorien für Dropdowns: [{id, label, archived}] in Anzeige-Reihenfolge."""
+    from sqlalchemy import select
+
+    rows = db.scalars(
+        select(CostCategory).order_by(CostCategory.sort_order, CostCategory.label)
+    ).all()
+    return [
+        {"id": c.id, "label": c.label, "archived": c.archived_at is not None}
+        for c in rows
+    ]
+
+
+def category_ids(db) -> set[str]:  # type: ignore[no-untyped-def]
+    """Alle Kategorie-IDs (inkl. archiviert) für die Formular-Validierung."""
+    return {c["id"] for c in category_choices(db)}
+
+
+def parse_watch_form(
+    form, valid_category_ids: set[str] | None = None  # type: ignore[no-untyped-def]
+) -> tuple[dict, dict[str, str]]:
+    """Validiert ein Watch-Formular → (Werte, Feldfehler).
+
+    `valid_category_ids`: alle (auch archivierten) Kategorie-IDs – None = keine
+    Prüfung (nur für direkte Unit-Tests; Router übergeben echte IDs).
+    """
     values: dict = {}
     errors: dict[str, str] = {}
 
@@ -131,19 +164,15 @@ def parse_watch_form(form) -> tuple[dict, dict[str, str]]:  # type: ignore[no-un
         values["usd_eur_rate"] = parse_rate(str(form.get("usd_eur_rate") or ""))
     except RateError as exc:
         errors["usd_eur_rate"] = str(exc)
-    if values.get("purchase_price_usd") is not None and not values.get("usd_eur_rate"):
-        errors.setdefault("usd_eur_rate", "Kurs zum Einkaufspreis erforderlich.")
-    if values.get("purchase_price_usd") is None:
-        values["usd_eur_rate"] = None  # Kurs nur bei USD-Eingabe relevant
-
     for key in ("target_price", "sale_price"):
         try:
             values[key] = parse_money(str(form.get(key) or ""))
         except MoneyError as exc:
             errors[key] = str(exc)
 
-    # Zusätzliche Einkaufskosten als Einzelpositionen (Betrags- + Kategoriefeld).
-    costs: list[tuple[int, str]] = []
+    # Zusätzliche Einkaufskosten als Einzelpositionen:
+    # Kategorie (DB-ID) – Währung – entweder fixer Betrag ODER Basis × Prozent.
+    costs: list[dict] = []
     try:
         rows = int(str(form.get("extra_cost_rows") or "0"))
     except ValueError:
@@ -152,23 +181,76 @@ def parse_watch_form(form) -> tuple[dict, dict[str, str]]:  # type: ignore[no-un
         errors["extra_costs"] = "Ungültige Anzahl Kostenpositionen."
         rows = 0
     for i in range(rows):
+        cat = str(form.get(f"extra_cost_category_{i}") or "").strip()
+        currency = str(form.get(f"extra_cost_currency_{i}") or "").strip().upper()
         amount_raw = str(form.get(f"extra_cost_amount_{i}") or "").strip()
-        category_raw = str(form.get(f"extra_cost_category_{i}") or "").strip()
-        if not amount_raw and not category_raw:
+        basis_raw = str(form.get(f"extra_cost_basis_{i}") or "").strip()
+        pct_raw = str(form.get(f"extra_cost_pct_{i}") or "").strip()
+        if not any((cat, amount_raw, basis_raw, pct_raw)):
             continue  # leere Zeile ignorieren
-        try:
-            amount = parse_money(amount_raw)
-        except MoneyError as exc:
-            errors[f"extra_cost_{i}"] = str(exc)
+        row_err: str | None = None
+        if not cat:
+            row_err = "Kategorie wählen."
+        elif valid_category_ids is not None and cat not in valid_category_ids:
+            row_err = "Unbekannte Kategorie."
+        elif currency not in {"USD", "EUR"}:
+            row_err = "Währung USD oder EUR wählen."
+
+        pct: int | None = None
+        basis: int | None = None
+        amount: int | None = None
+        if row_err is None and pct_raw:
+            try:
+                pct = parse_percent(pct_raw)
+            except PercentError as exc:
+                row_err = str(exc)
+            if row_err is None and basis_raw:
+                try:
+                    basis = parse_money(basis_raw)
+                except MoneyError as exc:
+                    row_err = str(exc)
+                if basis is None:
+                    row_err = "Basiswert fehlt (für den Prozent-Modus)."
+            elif row_err is None:
+                row_err = "Basiswert fehlt (für den Prozent-Modus)."
+            if row_err is None and amount_raw:
+                row_err = "Bitte entweder Betrag ODER Basis × % angeben – nicht beides."
+            if row_err is None and pct is not None and basis is not None:
+                amount = percent_amount(basis, pct)
+        elif row_err is None:
+            if basis_raw:
+                row_err = "Prozentwert fehlt (Basis nur im %-Modus)."
+            else:
+                try:
+                    amount = parse_money(amount_raw)
+                except MoneyError as exc:
+                    row_err = str(exc)
+                if row_err is None and amount is None:
+                    row_err = "Betrag fehlt."
+        if row_err:
+            errors[f"extra_cost_{i}"] = row_err
             continue
-        if amount is None:
-            errors[f"extra_cost_{i}"] = "Betrag fehlt."
-            continue
-        if category_raw not in {c.value for c in ExtraCostCategory}:
-            errors[f"extra_cost_{i}"] = "Bitte eine Kostenart wählen."
-            continue
-        costs.append((amount, category_raw))
+        costs.append(
+            {
+                "category_id": cat,
+                "currency": currency,
+                "amount_cents": amount,
+                "basis_cents": basis,
+                "percent_milli": pct,
+            }
+        )
     values["extra_costs"] = costs
+
+    # Ein Kurs pro Uhr: gilt für ALLE USD-Anteile (EK UND Positionen).
+    usd_present = values.get("purchase_price_usd") is not None or any(
+        c["currency"] == "USD" for c in costs
+    )
+    if usd_present and not values.get("usd_eur_rate"):
+        errors.setdefault(
+            "usd_eur_rate", "Kurs erforderlich – es sind USD-Beträge vorhanden."
+        )
+    if not usd_present:
+        values["usd_eur_rate"] = None
 
     # Technische Daten: Checkliste – angehaktes Feld ist Pflicht.
     specs: list[dict] = []
@@ -224,11 +306,17 @@ def apply_watch_values(watch: Watch, values: dict) -> None:
     watch.target_price_cents = values.get("target_price")
     watch.sale_price_cents = values.get("sale_price")
 
-    # Zusatzkosten komplett neu aufsetzen (Einzelpositionen).
+    # Zusatzkosten komplett neu aufsetzen (Einzelpositionen inkl. Währung/Basis).
     watch.extra_costs.clear()
-    for amount, category in values.get("extra_costs") or []:
+    for cost in values.get("extra_costs") or []:
         watch.extra_costs.append(
-            WatchExtraCost(category=ExtraCostCategory(category), amount_cents=amount)
+            WatchExtraCost(
+                category_id=cost["category_id"],
+                currency=cost["currency"],
+                amount_cents=cost["amount_cents"],
+                basis_cents=cost["basis_cents"],
+                percent_milli=cost["percent_milli"],
+            )
         )
 
     # Specs: Checklisten-Werte ersetzen ihre Labels, fremde Alt-Einträge

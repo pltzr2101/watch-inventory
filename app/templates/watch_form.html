@@ -74,30 +74,67 @@
       (Dienst konfigurierbar/abschaltbar, Standard: ECB-Kurse über frankfurter.app;
       der eingetragene Kurs bleibt historisch gespeichert.)</p>
 
-    <label>Zusätzliche Einkaufskosten (Einzelpositionen in EUR)</label>
+    <label>Kostenpositionen
+      <span class="muted">(Kategorie – Währung – Wert ODER Basis × %)</span>
+      &nbsp;· <a href="/cost-categories" target="_blank" rel="noopener">✎ Kategorien verwalten</a>
+    </label>
     <div class="cost-rows" data-cost-rows>
-      {% for amount, category in values.get("cost_rows") or [("","")] %}
+      {% set rows = values.get("cost_rows") or [{"category_id": "", "currency": "EUR", "amount": "", "basis": "", "pct": ""}] %}
+      {% for row in rows %}
       <div class="cost-row">
-        <input name="extra_cost_amount_{{ loop.index0 }}" inputmode="decimal" placeholder="z. B. 30,00"
-               value="{{ amount }}" aria-label="Betrag in Euro">
-        <select name="extra_cost_category_{{ loop.index0 }}" aria-label="Art der Kosten">
-          <option value="">– Art wählen –</option>
-          <option value="china_logistics" {% if category == "china_logistics" %}selected{% endif %}>Versand/Versicherung China</option>
-          <option value="de_dhl" {% if category == "de_dhl" %}selected{% endif %}>Versand aus Deutschland (DHL)</option>
-          <option value="wise" {% if category == "wise" %}selected{% endif %}>Wise-Gebühren</option>
-          <option value="box" {% if category == "box" %}selected{% endif %}>Box</option>
-          <option value="sonstiges" {% if category == "sonstiges" %}selected{% endif %}>Sonstiges</option>
+        <select class="cost-cat" name="extra_cost_category_{{ loop.index0 }}" aria-label="Kategorie">
+          <option value="">– Kategorie –</option>
+          {% for cat in categories %}
+          {% if not cat.archived or cat.id == row.category_id %}
+          <option value="{{ cat.id }}" {% if cat.id == row.category_id %}selected{% endif %}>{{ cat.label }}{% if cat.archived %} (archiviert){% endif %}</option>
+          {% endif %}
+          {% endfor %}
         </select>
+        <select class="cost-cur" name="extra_cost_currency_{{ loop.index0 }}" aria-label="Währung">
+          <option value="USD" {% if row.currency == "USD" %}selected{% endif %}>USD</option>
+          <option value="EUR" {% if row.currency == "EUR" %}selected{% endif %}>EUR</option>
+        </select>
+        <input class="cost-amount" name="extra_cost_amount_{{ loop.index0 }}" inputmode="decimal"
+               placeholder="Betrag" value="{{ row.amount }}" aria-label="Betrag (fix)">
+        <input class="cost-basis" name="extra_cost_basis_{{ loop.index0 }}" inputmode="decimal"
+               placeholder="Basis" value="{{ row.basis }}" aria-label="Basiswert für Prozent">
+        <input class="cost-pct" name="extra_cost_pct_{{ loop.index0 }}" inputmode="decimal"
+               placeholder="%" value="{{ row.pct }}" aria-label="Prozentwert"
+               title="Prozent – leer lassen für fixen Betrag">
+        <span class="cost-preview muted" aria-live="polite"></span>
         <button type="button" class="btn btn-xs" data-cost-remove aria-label="Position entfernen">✕</button>
       </div>
       {% endfor %}
     </div>
     <input type="hidden" name="extra_cost_rows" value="{{ values.get('extra_cost_rows') or '1' }}" data-cost-count>
-    <button type="button" class="btn btn-sm" data-cost-add>+ Weitere Kosten erfassen</button>
+    <button type="button" class="btn btn-sm" data-cost-add>+ Weitere Kosten</button>
+    <button type="button" class="btn btn-sm" data-cost-insurance>＋ Versicherung (6 %)</button>
+    <p class="muted" style="margin:.3rem 0 0">Fixer Betrag ODER Basis × % ausfüllen (nicht beides).
+      USD-Positionen werden mit dem Kurs der Uhr umgerechnet – ein Kurs reicht, Knopf oben.</p>
     {% if errors.get("extra_costs") %}<span class="field-error">{{ errors.extra_costs }}</span>{% endif %}
     {% for key, msg in errors.items() if key.startswith("extra_cost_") %}
     <span class="field-error">{{ msg }}</span>
     {% endfor %}
+
+    <template data-cost-template>
+      <div class="cost-row">
+        <select class="cost-cat" aria-label="Kategorie">
+          <option value="">– Kategorie –</option>
+          {% for cat in categories %}{% if not cat.archived %}
+          <option value="{{ cat.id }}">{{ cat.label }}</option>
+          {% endif %}{% endfor %}
+        </select>
+        <select class="cost-cur" aria-label="Währung">
+          <option value="USD">USD</option>
+          <option value="EUR" selected>EUR</option>
+        </select>
+        <input class="cost-amount" inputmode="decimal" placeholder="Betrag" aria-label="Betrag (fix)">
+        <input class="cost-basis" inputmode="decimal" placeholder="Basis" aria-label="Basiswert für Prozent">
+        <input class="cost-pct" inputmode="decimal" placeholder="%" aria-label="Prozentwert">
+        <span class="cost-preview muted"></span>
+        <button type="button" class="btn btn-xs" data-cost-remove aria-label="Position entfernen">✕</button>
+      </div>
+    </template>
 
     <label for="target_price">Geplanter Verkaufspreis (EUR)</label>
     <input id="target_price" name="target_price" inputmode="decimal" value="{{ values.get('target_price') or '' }}">

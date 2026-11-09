@@ -103,24 +103,18 @@ BOX_OPTIONS: dict[str, str] = {
 }
 
 
-class ExtraCostCategory(StrEnum):
-    """Kategorien interner Zusatzkosten (Einzelpositionen je Uhr)."""
-
-    CHINA_LOGISTICS = "china_logistics"  # Versand/Versicherung aus China
-    DE_DHL = "de_dhl"  # Versand aus Deutschland (DHL)
-    WISE = "wise"  # Wise-/Zahlungsgebühren
-    BOX = "box"  # Box-Einkauf
-    SONSTIGES = "sonstiges"
-
-    @property
-    def label(self) -> str:
-        return {
-            "china_logistics": "Versand/Versicherung China",
-            "de_dhl": "Versand aus Deutschland (DHL)",
-            "wise": "Wise-Gebühren",
-            "box": "Box",
-            "sonstiges": "Sonstiges",
-        }[self.value]
+# Startbestand der Kostenkategorien (einmalig in die DB gesät).
+# Kategorien sind DATENBANK-pflegbar: der Nutzer kann auf /cost-categories
+# selbst welche anlegen/umbenennen/archivieren – ohne Codeänderung.
+DEFAULT_COST_CATEGORIES: list[str] = [
+    "Versand China",
+    "Versicherung",
+    "Wise-Gebühren",
+    "Versand DHL (DE)",
+    "Box",
+    "Import/Zoll",
+    "Sonstiges",
+]
 
 
 def _sa_enum(enum_cls: type[enum.Enum], name: str):  # type: ignore[no-untyped-def]
@@ -245,30 +239,66 @@ class Watch(Base):
     )
 
 
+class CostCategory(Base):
+    """Kostenkategorie (Daten) – vom Nutzer über die UI pflegbar.
+
+    Dashboards gruppieren über die Kategorien-IDs; Umbenennen wirkt dann
+    über alle Positionen, Archivieren verhindert Neunutzung ohne Datenverlust.
+    """
+
+    __tablename__ = "cost_categories"
+    __table_args__ = (UniqueConstraint("label", name="uq_cost_category_label"),)
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    label: Mapped[str] = mapped_column(String(80))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class WatchExtraCost(Base):
-    """Einzelposition zusätzlicher Einkaufskosten (EUR) – Marge-Grundlage."""
+    """Einzelposition zusätzlicher Einkaufskosten – Marge-Grundlage.
+
+    Währung pro Position (USD/EUR); USD-Beträge werden mit dem historischen
+    USD→EUR-Kurs der Uhr umgerechnet. Optional Prozent-Modus: dann sind
+    `basis_cents` + `percent_milli` gesetzt und `amount_cents` ist der
+    serverseitig berechnete Betrag in der Währung der Position.
+    """
 
     __tablename__ = "watch_extra_costs"
     __table_args__ = (
         CheckConstraint("amount_cents >= 0", name="ck_extra_cost_amount"),
+        CheckConstraint("basis_cents IS NULL OR basis_cents >= 0", name="ck_extra_cost_basis"),
+        CheckConstraint(
+            "percent_milli IS NULL OR (percent_milli > 0 AND percent_milli <= 100000)",
+            name="ck_extra_cost_percent",
+        ),
+        CheckConstraint(
+            "currency IN ('USD','EUR')", name="ck_extra_cost_currency"
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     watch_id: Mapped[str] = mapped_column(
         ForeignKey("watches.id", ondelete="CASCADE"), index=True
     )
-    category: Mapped[ExtraCostCategory] = mapped_column(
-        _sa_enum(ExtraCostCategory, "extra_cost_category")
+    category_id: Mapped[str] = mapped_column(
+        ForeignKey("cost_categories.id", ondelete="RESTRICT"), index=True
     )
+    currency: Mapped[str] = mapped_column(String(3), default="EUR")
     amount_cents: Mapped[int] = mapped_column(Integer)
+    basis_cents: Mapped[int | None] = mapped_column(Integer)
+    percent_milli: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str | None] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     watch: Mapped[Watch] = relationship(back_populates="extra_costs")
+    category: Mapped[CostCategory] = relationship()
 
     @property
     def category_label(self) -> str:
-        return self.category.label
+        """Kategorie-Label mit sicherem Fallback (zeilentolerant)."""
+        return self.category.label if self.category is not None else "—"
 
 
 class StatusEvent(Base):
