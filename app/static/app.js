@@ -399,3 +399,161 @@ document.addEventListener("change", function (event) {
   grid.addEventListener("dragend", function () { dragged = null; });
   refreshMoveButtons();
 })();
+
+/* ===== Box-Einkauf (V5): Währungsumschalter + CNY-Kurs holen ===== */
+(function () {
+  var cur = document.getElementById("box-cur");
+  var group = document.getElementById("box-rate-group");
+  var btn = document.getElementById("box-rate-btn");
+  var rate = document.getElementById("box-rate");
+  if (!cur || !group) return;
+  function sync() { group.classList.toggle("wd-hidden", cur.value !== "CNY"); }
+  cur.addEventListener("change", sync);
+  sync();
+  if (btn && rate) {
+    btn.addEventListener("click", function () {
+      btn.disabled = true;
+      btn.textContent = "…";
+      fetch("/api/fx-rate?cur=cny")
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || String(r.status));
+            return d;
+          });
+        })
+        .then(function (d) { rate.value = d.rate; })
+        .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
+        .then(function () { btn.disabled = false; btn.textContent = "Kurs holen"; });
+    });
+  }
+})();
+
+/* ===== Auswertung (V5): Live-VK/Margen-Kalkulator ohne Seitenwechsel ===== */
+(function () {
+  if (!document.getElementById("wd-main")) return;
+  var seed = { ek: 0, extra: 0, box: 0 };
+  var seedEl = document.getElementById("wd-seed");
+  if (seedEl) {
+    try { seed = JSON.parse(seedEl.getAttribute("data-seed") || "{}"); }
+    catch (e) { /* Default */ }
+  }
+  function $(id) { return document.getElementById(id); }
+  function parseDe(s) {
+    if (s == null) return NaN;
+    var t = String(s).trim().replace(/\s/g, "");
+    if (!t) return NaN;
+    if (t.indexOf(",") >= 0 && t.indexOf(".") >= 0) {
+      if (t.lastIndexOf(",") > t.lastIndexOf(".")) t = t.replace(/\./g, "").replace(",", ".");
+      else t = t.replace(/,/g, "");
+    } else if (t.indexOf(",") >= 0) t = t.replace(",", ".");
+    return parseFloat(t);
+  }
+  function eur(n) {
+    var neg = n < 0; n = Math.abs(n);
+    var w = Math.floor(n), f = Math.round((n - w) * 100);
+    if (f === 100) { w += 1; f = 0; }
+    var ws = String(w).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return (neg ? "−" : "") + ws + "," + String(f).padStart(2, "0") + " €";
+  }
+  var mode = "marge";
+  function setMode(m) {
+    mode = m;
+    $("wd-modeM").classList.toggle("on", m === "marge");
+    $("wd-modeV").classList.toggle("on", m === "vk");
+    $("wd-wrapMarge").style.display = m === "marge" ? "" : "none";
+    $("wd-wrapVk").style.display = m === "vk" ? "" : "none";
+    calc();
+  }
+  function preset() {
+    $("wd-ek").value = eur((seed.ek || 0) / 100);
+    $("wd-zus").value = eur((seed.extra || 0) / 100);
+    $("wd-boxk").value = eur((seed.box || 0) / 100);
+    calc();
+  }
+  function calc() {
+    var ek = parseDe($("wd-ek").value) || 0;
+    var ekCur = $("wd-cur") ? $("wd-cur").value : "EUR";
+    if (ekCur === "USD") {
+      var k = parseDe($("wd-rate") ? $("wd-rate").value : "") || 0;
+      if (k > 0) { ek = Math.round(ek * k * 100) / 100; }
+      else {
+        $("wd-cost").textContent = "–";
+        $("wd-cap").textContent = "Netto-EK in USD – Kurs fehlt";
+        $("wd-main").textContent = "–";
+        $("wd-hint").textContent = "Bitte den USD→EUR-Kurs setzen („Kurs holen“), " +
+          "sonst wird der EK nicht umgerechnet.";
+        return;
+      }
+    }
+    var zus = parseDe($("wd-zus").value) || 0;
+    var boxOn = $("wd-box").checked;
+    var box = boxOn ? (parseDe($("wd-boxk").value) || 0) : 0;
+    var cost = ek + zus + box;
+    var step = parseFloat($("wd-round").value) || 1;
+    $("wd-cost").textContent = eur(cost);
+    if (mode === "marge") {
+      var w = parseDe($("wd-marge").value) || 0;
+      var raw = cost + w;
+      var vk = step === 1 ? Math.round(raw * 100) / 100 : Math.ceil(raw / step) * step;
+      var marge = vk - cost;
+      var pct = vk > 0 ? (marge / vk * 100) : 0;
+      $("wd-cap").textContent = "Verkaufspreis-Vorschlag (" +
+        (step === 1 ? "genau" : step + "er-Rundung") + ")";
+      $("wd-main").textContent = eur(vk);
+      $("wd-marge-out").textContent = eur(marge);
+      $("wd-marge-out").className = marge >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-pct").textContent = pct.toFixed(1).replace(".", ",") + " %";
+      $("wd-hint").textContent = step === 1
+        ? "Exakter VK für Wunschmarge " + eur(w) + "."
+        : "Gerundet aufwärts auf die " + step + " → echte Marge " + eur(marge) +
+          " statt " + eur(w) + ". Ohne Rundung: " + eur(raw) + ".";
+    } else {
+      var vk2 = parseDe($("wd-vk").value) || 0;
+      var m = vk2 - cost;
+      var p = vk2 > 0 ? (m / vk2 * 100) : 0;
+      $("wd-cap").textContent = "Marge bei VK " + eur(vk2);
+      $("wd-main").textContent = eur(m);
+      $("wd-main").style.color = m >= 0 ? "#5fc98a" : "#e0716c";
+      $("wd-marge-out").textContent = eur(m);
+      $("wd-marge-out").className = m >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-pct").textContent = p.toFixed(1).replace(".", ",") + " %";
+      $("wd-hint").textContent = "Zum Vergleich: bei 150 € Marge müsste der VK " +
+        eur(cost + 150) + " lauten" +
+        (step > 1 ? " (gerundet " + eur(Math.ceil((cost + 150) / step) * step) + ")" : "") + ".";
+    }
+  }
+  $("wd-modeM").addEventListener("click", function () { setMode("marge"); });
+  $("wd-modeV").addEventListener("click", function () { setMode("vk"); });
+  $("wd-preset").addEventListener("click", preset);
+  ["wd-ek", "wd-zus", "wd-boxk", "wd-marge", "wd-vk"].forEach(function (id) {
+    $(id).addEventListener("input", calc);
+  });
+  $("wd-box").addEventListener("change", calc);
+  $("wd-round").addEventListener("change", calc);
+  if ($("wd-cur")) {
+    $("wd-cur").addEventListener("change", function () {
+      var g = $("wd-rate-group");
+      if (g) g.classList.toggle("wd-hidden", $("wd-cur").value !== "USD");
+      calc();
+    });
+  }
+  if ($("wd-rate")) $("wd-rate").addEventListener("input", calc);
+  if ($("wd-rate-btn")) {
+    $("wd-rate-btn").addEventListener("click", function () {
+      var b = $("wd-rate-btn");
+      b.disabled = true; b.textContent = "…";
+      fetch("/api/fx-rate?cur=usd")
+        .then(function (r) {
+          return r.json().then(function (d) {
+            if (!r.ok) throw new Error(d.detail || String(r.status));
+            return d;
+          });
+        })
+        .then(function (d) { $("wd-rate").value = d.rate; calc(); })
+        .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
+        .then(function () { b.disabled = false; b.textContent = "Kurs holen"; });
+    });
+  }
+  preset();
+  setMode("marge");
+})();

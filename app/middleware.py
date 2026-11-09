@@ -90,7 +90,8 @@ class SecurityHeadersMiddleware:
                 headers.append(
                     (
                         b"content-security-policy",
-                        b"default-src 'self'; script-src 'self'; style-src 'self'; "
+                        b"default-src 'self'; script-src 'self'; "
+                        b"style-src 'self'; style-src-attr 'unsafe-inline'; "
                         b"img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; "
                         b"form-action 'self'",
                     )

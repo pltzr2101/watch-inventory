@@ -563,3 +563,53 @@ details[open] summary { margin-bottom: 0.4rem; }
 .cat-item .row-form { display: flex; gap: 0.4rem; flex: 1 1 16rem; }
 .cat-item .row-form input { flex: 1; }
 .row-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+
+/* Box-Einkauf: CNY-Kursgruppe (nur bei Währung CNY sichtbar) */
+#box-rate-group.wd-hidden { display: none; }
+#box-rate-group { gap: 0.4rem; align-items: center; }
+
+/* ===== Auswertungs-Dashboard (V5, /auswertung) – CSP-konform als Datei ===== */
+.wd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
+.wd-kpi { background: #16191f; border: 1px solid #262b35; border-radius: 12px; padding: 12px 14px; }
+.wd-kpi .lbl { font-size: 11px; color: #8d93a1; text-transform: uppercase; letter-spacing: .05em; }
+.wd-kpi .val { font-size: 23px; font-weight: 650; margin-top: 5px; font-variant-numeric: tabular-nums; }
+.wd-kpi .dlt { font-size: 12px; margin-top: 3px; color: #8d93a1; }
+.wd-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; }
+.wd-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 1000px) { .wd-grid, .wd-grid-3 { grid-template-columns: 1fr; } }
+.wd-card { background: #16191f; border: 1px solid #262b35; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+.wd-card h2 { font-size: 13px; margin: 0 0 12px; color: #e8b84b; text-transform: uppercase; letter-spacing: .06em; }
+.wd-chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0 4px; }
+.wd-chip { border: 1px solid #262b35; background: #16191f; color: #8d93a1; border-radius: 99px; padding: 5px 14px; font-size: 13px; text-decoration: none; }
+.wd-chip.on { border-color: #e8b84b; color: #e8b84b; }
+.wd-bars div.row { display: flex; align-items: center; gap: 10px; margin: 7px 0; }
+.wd-bars .nm { width: 170px; font-size: 13px; color: #8d93a1; flex: none; }
+.wd-bars .bar { height: 24px; border-radius: 6px; background: linear-gradient(90deg, #3d6bb3, #6ea8e8); display: flex; align-items: center; padding: 0 9px; font-size: 12px; color: #0c1220; font-weight: 600; min-width: 8.5rem; }
+table.wd-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.wd-tbl th { font-size: 11px; text-transform: uppercase; color: #8d93a1; text-align: left; padding: 5px 8px; border-bottom: 1px solid #262b35; }
+.wd-tbl td { padding: 7px 8px; border-bottom: 1px solid #1e222b; font-size: 14px; }
+.wd-tbl tr:last-child td { border-bottom: 0; }
+.wd-num { text-align: right; }
+.wd-calc { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 860px) { .wd-calc { grid-template-columns: 1fr; } }
+.wd-calc label { display: block; font-size: 12px; color: #8d93a1; margin: 9px 0 3px; }
+.wd-calc input, .wd-calc select { width: 100%; background: #10131a; border: 1px solid #262b35; color: #e7e4dd; border-radius: 8px; padding: 8px 10px; font-size: 15px; font-variant-numeric: tabular-nums; }
+.wd-seg { display: flex; border: 1px solid #262b35; border-radius: 9px; overflow: hidden; margin-top: 3px; }
+.wd-seg button { flex: 1; background: #10131a; color: #8d93a1; border: 0; padding: 8px; cursor: pointer; font-size: 14px; }
+.wd-seg button.on { background: #e8b84b; color: #16130a; font-weight: 600; }
+.wd-boxline { display: flex; gap: 10px; align-items: center; margin-top: 10px; background: #10131a; border: 1px solid #262b35; border-radius: 9px; padding: 9px 11px; }
+.wd-boxline label { margin: 0; flex: 1; }
+.wd-boxline input[type=checkbox] { width: auto; }
+.wd-boxline input.wd-small { width: 100px; }
+.wd-out { background: #1b1f27; border: 1px solid #262b35; border-radius: 12px; padding: 16px; }
+.wd-out .main { font-size: 40px; font-weight: 700; color: #e8b84b; font-variant-numeric: tabular-nums; }
+.wd-out .cap { font-size: 12px; color: #8d93a1; text-transform: uppercase; letter-spacing: .06em; }
+.wd-out .line { display: flex; justify-content: space-between; border-top: 1px solid #262b35; padding: 8px 0; font-variant-numeric: tabular-nums; }
+.wd-ok { color: #5fc98a; } .wd-warn { color: #e0716c; }
+.wd-note { font-size: 12.5px; color: #8d93a1; margin-top: 10px; }
+.wd-btn-sm { border: 1px solid #262b35; background: #10131a; color: #e7e4dd; border-radius: 8px; padding: 7px 12px; font-size: 13px; cursor: pointer; margin-top: 7px; }
+.wd-legend { font-size: 12px; color: #8d93a1; margin-top: 6px; }
+.wd-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 5px 0 12px; vertical-align: -1px; }
+
+/* Generisch: versteckbare Kurs-/Optionsgruppen (Dashboard-Kalkulator) */
+.wd-hidden { display: none !important; }

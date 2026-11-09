@@ -96,24 +96,32 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
         db.execute(select(CostCategory.id, CostCategory.label)).all()
     )
 
+    # Einstands-/Kosten-Durchschnitte: GESAMTBESTAND (nicht archiviert, mit
+    # EK-Wert) – die „was kostet mich so eine Uhr"-Frage ist unabhängig von
+    # Status und Zeitraum. Verkaufs-KPIs (Marge, MT, Haltedauer, Zeitreihe)
+    # bleiben periodenbezogen auf den gewählten Zeitraum.
     n = len(sold)
-    with_ek = [w for w in sold if w.purchase_price_cents is not None]
-    avg_ek = round(sum(_purchase_eur(w) for w in with_ek) / len(with_ek)) if with_ek else 0
+    non_archived = [w for w in all_watches if not w.archived_at]
+    base = [w for w in non_archived if w.purchase_price_cents is not None]
+    n_base = len(base)
+    avg_ek = round(sum(_purchase_eur(w) for w in base) / n_base) if n_base else 0
 
-    buckets = [_extra_buckets(w, labels) for w in sold]
+    buckets = [_extra_buckets(w, labels) for w in base]
     sum_extra = sum(b["versicherung"] + b["versand"] + b["uebrige"] for b in buckets)
     sum_ins = sum(b["versicherung"] for b in buckets)
     sum_ship = sum(b["versand"] for b in buckets)
-    avg_extra = round(sum_extra / n) if n else 0
-    avg_ins = round(sum_ins / n) if n else 0
-    avg_ship = round(sum_ship / n) if n else 0
+    avg_extra = round(sum_extra / n_base) if n_base else 0
+    avg_ins = round(sum_ins / n_base) if n_base else 0
+    avg_ship = round(sum_ship / n_base) if n_base else 0
 
     margins = [(w, margin_eur(w)) for w in sold]
     margins_ok = [(w, m) for w, m in margins if m is not None]
-    avg_margin = round(sum(m for _, m in margins_ok) / len(margins_ok)) if margins_ok else 0
+    avg_margin = (
+        round(sum(m for _, m in margins_ok) / len(margins_ok)) if margins_ok else None
+    )
     sales = [w.sale_price_cents for w, _ in margins_ok if w.sale_price_cents]
     avg_pct = (
-        round(100 * sum(m for _, m in margins_ok) / sum(sales)) if sales else 0
+        round(100 * sum(m for _, m in margins_ok) / sum(sales)) if sales else None
     )
     avg_sale = round(sum(sales) / len(sales)) if sales else 0
 
@@ -126,6 +134,7 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
 
     active_with_val = [w for w in active if w.purchase_price_cents is not None]
     stock_value = sum(_purchase_eur(w) + _extra_total(w) for w in active_with_val)
+    n_non_archived = len(non_archived)
 
     # Verkäufe/Monat im Zeitraum
     if period == "all":
@@ -137,7 +146,7 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
 
     # Ø Haltedauer der verkauften Uhren im Zeitraum (Ankunft DE → Verkauf)
     held = [_held_days(w, now) for w in sold if w.sold_at]
-    avg_held = round(sum(held) / len(held)) if held else 0
+    avg_held = round(sum(held) / len(held)) if held else None
 
     # Zeitreihe: letzte 12 Monate, Umsatz + Marge je Monat
     months_series: list[dict] = []
@@ -197,6 +206,8 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
         "kpi": {
             "avg_sale": avg_sale,
             "avg_ek": avg_ek,
+            "n_base": n_base,
+            "n_non_archived": n_non_archived,
             "avg_extra": avg_extra,
             "avg_insurance": avg_ins,
             "avg_shipping": avg_ship,

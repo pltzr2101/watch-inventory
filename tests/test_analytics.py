@@ -117,3 +117,27 @@ def test_dashboard_requires_auth(auth_client) -> None:
     if r.status_code != 401:
         assert "/login" in r.headers.get("location", "")
     assert "Ø EK / Uhr" not in r.text
+
+
+def test_dashboard_fills_kpis_from_active_stock_without_sales(auth_client) -> None:
+    """Sein Fehlerfall: nur aktive Uhren → Einstands-KPIs müssen trotzdem
+    füllen; Verkaufs-KPIs zeigen „–“ statt geratenen Nullen."""
+    from app.money import format_money
+
+    watch_id = create_watch(auth_client, purchase_price="300,00")
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        w = db.get(Watch, watch_id)
+        assert w is not None
+        eur_ek = w.purchase_price_cents or 0
+    assert eur_ek > 0
+
+    r = auth_client.get("/auswertung")
+    assert r.status_code == 200
+    body = r.text
+    assert "Verkauft im Zeitraum: 0" in body
+    assert format_money(eur_ek) in body            # Ø-EK aus dem Bestand
+    assert "Gesamtbestand, 1 Uhren mit EK-Wert" in body
+    assert "keine Verkäufe im Zeitraum" in body    # Marge/Haltedauer ehrlich
+    # Kalkulator-Seed liegt als data-Attribut vor (CSP-konform)
+    assert f'"ek": {eur_ek}' in body

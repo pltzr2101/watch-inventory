@@ -33,7 +33,7 @@ def _svg_geometry(data: dict) -> None:
         ("Ø EK", kpi["avg_ek"]),
         ("Ø Zusatzkosten", kpi["avg_extra"]),
         ("Ø Box-EK", kpi["avg_box"]),
-        ("Ø Marge", max(0, kpi["avg_margin"])),
+        ("Ø Marge", max(0, kpi["avg_margin"] or 0)),
     ]
     data["waterfall"] = [
         {"label": label, "cents": cents, "pct": max(1, round(100 * cents / base))}

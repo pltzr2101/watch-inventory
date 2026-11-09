@@ -179,3 +179,16 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
   Gesamtmarge inkl. Box-EK.
 - Box-EK und Snapshots erscheinen **nie** in Anzeigen- oder ZIP-Kontexten
   (eigener Test).
+
+### Kursdienst (USD & CNY)
+
+- `FX_RATE_URL` liefert Kursvorschläge auf Knopfdruck (kein Hintergrundlauf).
+  Standard: `https://api.frankfurter.dev/v1/latest?from=USD&to=EUR`
+  (frankfurter.dev = aktuelles Ziel von frankfurter.app; ohne Redirect-Umweg).
+- **CNY**: der Box-Einkauf bietet „Kurs holen“ (gleiche Infrastruktur):
+  `GET /api/fx-rate?cur=cny` ersetzt `from=USD` in der gesetzten URL durch
+  `from=CNY`. Die `FX_RATE_URL` muss daher `from=USD` enthalten (Default und
+  `.env.example` erfüllen das) oder leer bleiben (=Dienst deaktiviert,
+  EUR-Direkteingabe funktioniert weiterhin).
+- Gespeichert wird immer der EUR-Betrag plus Kurs-Snapshot (3 Nachkommastellen,
+  CNY-Bereich 0,010–5,000 statt USD-Plausibilität 0,5–5,0).

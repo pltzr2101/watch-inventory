@@ -272,7 +272,9 @@ def test_fx_rate_url_env_semantics() -> None:
     """Nicht gesetzt = Standarddienst, ausdrücklich leer = deaktiviert."""
     from app.config import fx_rate_url_from_env
 
-    assert fx_rate_url_from_env(None).startswith("https://api.frankfurter.app/")
+    default = fx_rate_url_from_env(None)
+    assert default.startswith("https://api.frankfurter.")
+    assert "from=USD" in default  # Vorlage für die CNY-Substitution
     assert fx_rate_url_from_env("") == ""
     assert fx_rate_url_from_env("   ") == ""
     assert fx_rate_url_from_env(" https://kurs.example/api ") == "https://kurs.example/api"

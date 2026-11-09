@@ -42,7 +42,7 @@ def fx_rate_url_from_env(raw: str | None) -> str:
     erhalten bleiben – er schaltet den Kursdienst ab.
     """
     if raw is None:
-        return "https://api.frankfurter.app/latest?from=USD&to=EUR"
+        return "https://api.frankfurter.dev/v1/latest?from=USD&to=EUR"
     return raw.strip()
 
 
@@ -105,7 +105,7 @@ class Settings:
     listing_template_dir: Path | None = None
     # USD→EUR-Kursdienst für das Einkaufsformular (nur Vorschlag per Knopf;
     # "" deaktiviert den Dienst, Eingabe dann rein manuell).
-    fx_rate_url: str = "https://api.frankfurter.app/latest?from=USD&to=EUR"
+    fx_rate_url: str = "https://api.frankfurter.dev/v1/latest?from=USD&to=EUR"
     extra: dict = field(default_factory=dict)
 
     @property

@@ -24,7 +24,7 @@
     </select>
     <input name="total_cost" inputmode="decimal" placeholder="Ware gesamt (z. B. 80,00)" required>
     <input name="shipping_cost" inputmode="decimal" placeholder="Versand der Bestellung (z. B. 40,00)">
-    <span id="box-rate-group" style="display:none;gap:.4rem;align-items:center">
+    <span id="box-rate-group" class="wd-hidden" style="gap:.4rem;align-items:center">
       <input name="rate" id="box-rate" inputmode="decimal" placeholder="Kurs CNY→EUR (z. B. 0,127)">
       <button type="button" class="btn btn-sm" id="box-rate-btn">Kurs holen</button>
     </span>
@@ -102,32 +102,4 @@
   </table>
 </div>
 {% endif %}
-<script>
-(function () {
-  var cur = document.getElementById("box-cur");
-  var group = document.getElementById("box-rate-group");
-  var btn = document.getElementById("box-rate-btn");
-  var rate = document.getElementById("box-rate");
-  if (!cur || !group) return;
-  function sync() { group.style.display = cur.value === "CNY" ? "inline-flex" : "none"; }
-  cur.addEventListener("change", sync);
-  sync();
-  if (btn && rate) {
-    btn.addEventListener("click", function () {
-      btn.disabled = true;
-      btn.textContent = "…";
-      fetch("/api/fx-rate?cur=cny")
-        .then(function (r) {
-          return r.json().then(function (d) {
-            if (!r.ok) throw new Error(d.detail || String(r.status));
-            return d;
-          });
-        })
-        .then(function (d) { rate.value = d.rate; })
-        .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
-        .then(function () { btn.disabled = false; btn.textContent = "Kurs holen"; });
-    });
-  }
-})();
-</script>
 {% endblock %}

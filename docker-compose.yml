@@ -29,7 +29,7 @@ services:
       ADMIN_PASSWORD_HASH: ${ADMIN_PASSWORD_HASH:-}
       # USD→EUR-Kursdienst (V2-Formular, nur Knopfdruck): nicht gesetzt =
       # Standard (frankfurter.app); ausdrücklich leer = deaktiviert.
-      FX_RATE_URL: ${FX_RATE_URL-https://api.frankfurter.app/latest?from=USD&to=EUR}
+      FX_RATE_URL: ${FX_RATE_URL-https://api.frankfurter.dev/v1/latest?from=USD&to=EUR}
       DATA_DIR: /data
       # Hinter Reverse Proxy/HTTPS auf true setzen:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
