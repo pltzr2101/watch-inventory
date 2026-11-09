@@ -276,3 +276,42 @@ def test_fx_rate_url_env_semantics() -> None:
     assert fx_rate_url_from_env("") == ""
     assert fx_rate_url_from_env("   ") == ""
     assert fx_rate_url_from_env(" https://kurs.example/api ") == "https://kurs.example/api"
+
+
+# ---------- Fehler-Rückgabe: Eingaben bleiben erhalten (V3-Bugfix-Runde) ----------
+
+
+def test_error_rerender_keeps_prices_and_rate(auth_client) -> None:
+    """Nach Validierungsfehlern bleiben EK, Kurs und VK im richtigen Format."""
+    csrf = csrf_for(auth_client, "/watches/new")
+    r = post_form(
+        auth_client,
+        "/watches/new",
+        {
+            "title": "",  # Pflichtfehler → 400
+            "brand": "",
+            "status": "in_china",
+            "purchase_price": "1.050,00",
+            "usd_eur_rate": "0,893",
+            "target_price": "1.590,00",
+        },
+        csrf=csrf,
+    )
+    assert r.status_code == 400
+    assert 'value="1.050,00"' in r.text
+    assert 'value="0,893"' in r.text  # nicht der Milli-Rohwert „893"
+    assert 'value="1.590,00"' in r.text
+    assert 'value="893"' not in r.text
+
+
+def test_empty_file_part_does_not_block_save(auth_client) -> None:
+    """Ein leerer Datei-Part (Browser-Sonderfall) blockiert die Anlage NICHT."""
+    csrf = csrf_for(auth_client, "/watches/new")
+    r = post_form(
+        auth_client,
+        "/watches/new",
+        {"title": "Ohne-Bild", "brand": "Test", "status": "in_china"},
+        csrf=csrf,
+        files={"files": [("", b"", "image/jpeg")]},
+    )
+    assert r.status_code == 303, r.text[:400]

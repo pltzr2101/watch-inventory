@@ -28,6 +28,10 @@ async def prepare_uploads(
             continue
         filename = getattr(upload, "filename", None) or "bild"
         data = await upload.read()
+        if not data:
+            # Leerer Part (Browser-Sonderfall bei leerem/abgebrochenem
+            # Datei-Feld) ist KEIN Upload – nicht blockieren, still überspringen.
+            continue
         try:
             probe = image_ops.probe_image(
                 data,

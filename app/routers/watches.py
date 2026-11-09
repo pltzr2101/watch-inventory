@@ -129,6 +129,16 @@ def _watch_form_context(
     else:
         # Neu-Anlage oder Fehler-Rückgabe: parse-Werte renderbar aufbereiten.
         v = dict(values or {})
+        # Zerstörungsfreier Roundtrip: parse speichert ints (Cents/Milli),
+        # das Formular erwartet aber Eingabe-Strings – sonst sind EK/Kurs/VK
+        # nach Fehlern leer oder der Kurs landet als „893" statt „0,893" drin.
+        if v.get("purchase_price_usd") is not None:
+            v["purchase_price"] = format_money(v["purchase_price_usd"]).replace(" €", "")
+        if v.get("usd_eur_rate") is not None:
+            v["usd_eur_rate"] = format_rate(v["usd_eur_rate"])
+        for _price_key in ("target_price", "sale_price"):
+            if v.get(_price_key) is not None:
+                v[_price_key] = format_money(v[_price_key]).replace(" €", "")
         if "extra_costs" in v:
             cost_rows = [
                 {

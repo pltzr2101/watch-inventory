@@ -137,8 +137,11 @@ def test_mixed_currencies_in_margin(auth_client) -> None:
     detail = auth_client.get(f"/watches/{watch_id}")
     assert detail.status_code == 200
     assert "30,00 USD × 1,1 = 33,00 €" in detail.text
+    # Übersichtliches dl-Layout: je Position ein dt/dd-Paar statt UL-Chaos
+    assert "<dt>Versand China</dt>" in detail.text
+    assert "<dt>Wise-Gebühren</dt>" in detail.text
     # Summe Zusatz = 33,00 + 18,50; Marge = 1.300 − (1.100 + 51,50)
-    assert "Summe Zusatz:" in detail.text and "51,50" in detail.text
+    assert "Summe Zusatz" in detail.text and "51,50" in detail.text
     assert "148,50" in detail.text
 
 

@@ -65,17 +65,14 @@
       {% else %}
       <dt>Einkaufspreis</dt><dd>{{ format_money(watch.purchase_price_cents) }}</dd>
       {% endif %}
-      <dt>Zusatzkosten</dt>
-      <dd>
-        {% if cost_lines %}
-        <ul class="spec-list" style="columns:1;padding-left:1.1rem;margin:0">
-          {% for line in cost_lines %}
-          <li><strong>{{ line.label }}:</strong> {{ line.detail }}</li>
-          {% endfor %}
-        </ul>
-        {% if extra_total_cents %}<div class="mt"><strong>Summe Zusatz:</strong> {{ format_money(extra_total_cents) }}</div>{% endif %}
-        {% else %}—{% endif %}
-      </dd>
+      {% for line in cost_lines %}
+      <dt>{{ line.label }}</dt>
+      <dd>{{ line.detail }}</dd>
+      {% endfor %}
+      {% if cost_lines and extra_total_cents %}
+      <dt>Summe Zusatz</dt>
+      <dd><strong>{{ format_money(extra_total_cents) }}</strong></dd>
+      {% endif %}
       {% if total_cost_cents is not none %}
       <dt>EK gesamt (inkl. Zusatz)</dt><dd><strong>{{ format_money(total_cost_cents) }}</strong></dd>
       {% endif %}
