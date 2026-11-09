@@ -30,15 +30,15 @@
   <tbody>
   {% for w in watches %}
   <tr>
-    <td class="nowrap mono">{{ w.sku }}</td>
-    <td><a href="/watches/{{ w.id }}">{{ w.title }}</a>
+    <td class="nowrap mono" data-label="SKU">{{ w.sku }}</td>
+    <td data-label="Titel"><a href="/watches/{{ w.id }}">{{ w.title }}</a>
       {% if w.brand %}<span class="muted">· {{ w.brand }}{% if w.model %} {{ w.model }}{% endif %}</span>{% endif %}
       {% if w.archived_at %}<span class="tag">archiviert</span>{% endif %}
     </td>
-    <td><span class="badge badge-{{ w.status.value }}">{{ w.status.label }}</span></td>
-    <td class="nowrap">{{ format_money(w.purchase_price_cents) }}</td>
-    <td class="nowrap">{% if w.target_price_cents is not none %}{{ format_money(w.target_price_cents) }}{% elif w.sale_price_cents is not none %}{{ format_money(w.sale_price_cents) }}{% else %}—{% endif %}</td>
-    <td>{% if w.provenance.value == "wecatalog" %}<span class="tag tag-warn">Katalog-Import</span>{% else %}{{ "manuell" if w.provenance.value == "manual" else "eigene Inhalte" }}{% endif %}</td>
+    <td data-label="Status"><span class="badge badge-{{ w.status.value }}">{{ w.status.label }}</span></td>
+    <td class="nowrap" data-label="Einkauf">{{ format_money(w.purchase_price_cents) }}</td>
+    <td class="nowrap" data-label="Ziel-/Verkauf">{% if w.target_price_cents is not none %}{{ format_money(w.target_price_cents) }}{% elif w.sale_price_cents is not none %}{{ format_money(w.sale_price_cents) }}{% else %}—{% endif %}</td>
+    <td data-label="Herkunft">{% if w.provenance.value == "wecatalog" %}<span class="tag tag-warn">Katalog-Import</span>{% else %}{{ "manuell" if w.provenance.value == "manual" else "eigene Inhalte" }}{% endif %}</td>
     <td class="nowrap"><a class="btn btn-sm" href="/watches/{{ w.id }}">Öffnen</a></td>
   </tr>
   {% endfor %}

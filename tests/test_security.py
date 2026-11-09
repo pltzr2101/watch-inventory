@@ -45,6 +45,16 @@ def test_healthz_and_static_are_public(client: TestClient) -> None:
     assert client.get("/static/style.css").status_code == 200
 
 
+def test_static_assets_are_always_revalidated(client: TestClient) -> None:
+    """no-cache: nach einem Image-Update darf der Browser kein altes CSS
+    heuristisch weiter anzeigen (ETag/Last-Modified liefern dann 304)."""
+    r = client.get("/static/style.css")
+    assert r.status_code == 200
+    assert r.headers.get("cache-control") == "no-cache"
+    r2 = client.get("/healthz")
+    assert "cache-control" not in r2.headers
+
+
 def test_login_success_and_logout(auth_client: TestClient) -> None:
     r = auth_client.get("/")
     assert r.status_code == 200

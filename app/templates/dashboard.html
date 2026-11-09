@@ -24,9 +24,9 @@
   <tbody>
   {% for event in recent %}
   <tr>
-    <td class="nowrap">{{ fmt_dt(event.changed_at) }}</td>
-    <td><a href="/watches/{{ event.watch_id }}">{{ event.watch.sku }} – {{ event.watch.title }}</a></td>
-    <td>{{ event.from_status.label if event.from_status else "—" }} → {{ event.to_status.label }}</td>
+    <td class="nowrap" data-label="Wann">{{ fmt_dt(event.changed_at) }}</td>
+    <td data-label="Uhr"><a href="/watches/{{ event.watch_id }}">{{ event.watch.sku }} – {{ event.watch.title }}</a></td>
+    <td data-label="Änderung">{{ event.from_status.label if event.from_status else "—" }} → {{ event.to_status.label }}</td>
   </tr>
   {% endfor %}
   </tbody>

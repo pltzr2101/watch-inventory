@@ -79,6 +79,8 @@ class SecurityHeadersMiddleware:
             await self.app(scope, receive, send)
             return
 
+        is_static = _path(scope).startswith("/static/")
+
         async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
                 headers = message.setdefault("headers", [])
@@ -93,6 +95,11 @@ class SecurityHeadersMiddleware:
                         b"form-action 'self'",
                     )
                 )
+                # Statische Assets immer revalidieren (heuristische Browser-
+                # Caches wie Safari würden altes CSS nach einem Image-Update
+                # weiter zeigen; ETag/Last-Modified liefern dann 304).
+                if is_static and not any(k == b"cache-control" for k, _ in headers):
+                    headers.append((b"cache-control", b"no-cache"))
             await send(message)
 
         await self.app(scope, receive, send_wrapper)

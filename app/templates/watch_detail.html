@@ -161,10 +161,10 @@
     <tbody>
     {% for event in watch.status_events | reverse %}
       <tr>
-        <td class="nowrap">{{ fmt_dt(event.changed_at) }}</td>
-        <td>{{ event.from_status.label if event.from_status else "—" }}</td>
-        <td>{{ event.to_status.label }}</td>
-        <td>{{ event.note or "" }}</td>
+        <td class="nowrap" data-label="Wann">{{ fmt_dt(event.changed_at) }}</td>
+        <td data-label="Von">{{ event.from_status.label if event.from_status else "—" }}</td>
+        <td data-label="Nach">{{ event.to_status.label }}</td>
+        <td data-label="Notiz">{{ event.note or "" }}</td>
       </tr>
     {% endfor %}
     </tbody>

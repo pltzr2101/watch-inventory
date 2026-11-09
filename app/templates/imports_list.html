@@ -12,11 +12,11 @@
   <tbody>
   {% for p in previews %}
   <tr>
-    <td class="nowrap">{{ fmt_dt(p.created_at) }}</td>
-    <td>{{ "Aktualisierung" if p.kind == "update" else "Neue Uhr" }}</td>
-    <td>{{ p.payload.get("title") or "—" }}</td>
-    <td class="muted">{{ p.source_url or "manuell eingefügt" }}</td>
-    <td>
+    <td class="nowrap" data-label="Erstellt">{{ fmt_dt(p.created_at) }}</td>
+    <td data-label="Art">{{ "Aktualisierung" if p.kind == "update" else "Neue Uhr" }}</td>
+    <td data-label="Titel">{{ p.payload.get("title") or "—" }}</td>
+    <td class="muted" data-label="Quelle">{{ p.source_url or "manuell eingefügt" }}</td>
+    <td data-label="Status">
       {% if p.status == "pending" %}<span class="tag tag-warn">offen</span>
       {% elif p.status == "confirmed" %}<span class="tag tag-ok">bestätigt</span>
       {% else %}<span class="tag">verworfen</span>{% endif %}
