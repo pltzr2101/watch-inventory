@@ -45,7 +45,7 @@
 <div class="card">
   <h2>Bestand</h2>
   {% if rows %}
-  <table class="tbl-stack">
+  <table class="table tbl-stack">
     <thead>
       <tr><th>Typ</th><th>Bestand</th><th>Ø-EK / Box</th><th>Menge</th>
           <th>Ware</th><th>Versand</th><th>Σ</th><th></th></tr>
@@ -55,10 +55,10 @@
       <tr{% if row.archived_at %} class="muted"{% endif %}>
         <td data-label="Typ">{{ row.label }}{% if row.archived_at %} <span class="tag">archiviert</span>{% endif %}</td>
         <td data-label="Bestand">{% if row.stock < 0 %}<span class="tag tag-warn">{{ row.stock }}</span>{% else %}{{ row.stock }}{% endif %}</td>
-        <td data-label="Ø-EK / Box">{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
+        <td class="nowrap" data-label="Ø-EK / Box">{{ format_money(row.avg) if row.avg is not none else "—" }}</td>
         <td data-label="Menge">{{ row.purchased }}</td>
-        <td data-label="Ware">{{ format_money(row.goods_spend) }}</td>
-        <td data-label="Versand">{{ format_money(row.shipping_spend) }}</td>
+        <td class="nowrap" data-label="Ware">{{ format_money(row.goods_spend) }}</td>
+        <td class="nowrap" data-label="Versand">{{ format_money(row.shipping_spend) }}</td>
         <td data-label="Σ"><strong>{{ format_money(row.total_spend) }}</strong></td>
         <td class="td-act">
           <form method="post" action="/boxes/types/{{ row.id }}/archive" class="act-form"
@@ -103,18 +103,18 @@
 {% if purchases %}
 <div class="card">
   <h2>Letzte Einkäufe</h2>
-  <table class="tbl-stack">
+  <table class="table tbl-stack">
     <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Ware</th><th>Versand</th>
         <th>Ø / Box</th><th>Währung</th><th>Notiz</th><th>Aktionen</th></tr></thead>
     <tbody>
       {% for p in purchases %}
       <tr id="kauf-{{ p.id }}">
-        <td data-label="Wann">{{ fmt_dt(p.bought_at) }}</td>
+        <td class="nowrap" data-label="Wann">{{ fmt_dt(p.bought_at) }}</td>
         <td data-label="Typ">{{ p.type_label }}</td>
         <td data-label="Menge">{{ p.quantity }}</td>
-        <td data-label="Ware">{{ format_money(p.goods_cents) }}</td>
-        <td data-label="Versand">{{ format_money(p.shipping_cents) }}</td>
-        <td data-label="Ø / Box">{{ format_money(p.unit) }}</td>
+        <td class="nowrap" data-label="Ware">{{ format_money(p.goods_cents) }}</td>
+        <td class="nowrap" data-label="Versand">{{ format_money(p.shipping_cents) }}</td>
+        <td class="nowrap" data-label="Ø / Box">{{ format_money(p.unit) }}</td>
         <td data-label="Währung">{% if p.currency == "CNY" %}CNY @ {{ p.rate }}{% else %}EUR{% endif %}</td>
         <td data-label="Notiz">{{ p.note or "—" }}</td>
         <td class="td-act">
@@ -161,16 +161,16 @@
 {% if sales %}
 <div class="card">
   <h2>Verkaufte Einzelboxen</h2>
-  <table class="tbl-stack">
+  <table class="table tbl-stack">
     <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Erlös</th>
         <th>Notiz</th><th>Aktionen</th></tr></thead>
     <tbody>
       {% for s in sales %}
       <tr>
-        <td data-label="Wann">{{ fmt_dt(s.sold_at) }}</td>
+        <td class="nowrap" data-label="Wann">{{ fmt_dt(s.sold_at) }}</td>
         <td data-label="Typ">{{ s.type_label }}</td>
         <td data-label="Menge">{{ s.quantity }}</td>
-        <td data-label="Erlös">{{ format_money(s.price_cents) if s.price_cents else "—" }}</td>
+        <td class="nowrap" data-label="Erlös">{{ format_money(s.price_cents) if s.price_cents else "—" }}</td>
         <td data-label="Notiz">{{ s.note or "—" }}</td>
         <td class="td-act">
           <form method="post" action="/boxes/sales/{{ s.id }}/delete" class="act-form"

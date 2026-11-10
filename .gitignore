@@ -13,5 +13,6 @@ data/
 *.sqlite3
 *.db
 .DS_Store
-.openhands/
+.openhands/*
+!.openhands/memory/
 .demo/
