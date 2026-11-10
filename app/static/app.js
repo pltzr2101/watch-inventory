@@ -508,47 +508,76 @@ document.addEventListener("change", function (event) {
     var zus = parseDe($("wd-zus").value) || 0;
     var boxOn = $("wd-box").checked;
     var box = boxOn ? (parseDe($("wd-boxk").value) || 0) : 0;
+    var boxMargeSoll = boxOn ? (parseDe($("wd-marge-box").value) || 0) : 0;
     var cost = ek + zus + box;
     var step = parseFloat($("wd-round").value) || 1;
+    $("wd-costlbl").textContent = "Kostenbasis (EK + Zusatz" + (boxOn ? " + Box)" : ")");
     $("wd-cost").textContent = eur(cost);
+    /* Split-Regel: die Box-Marge wird festgehalten; Uhr-Marge = Rest der
+       Gesamt-Marge (Rundungsaufschlag landet bei der Uhr). */
+    function outSplit(mGes, mBox, mUhr) {
+      $("wd-marge-urh-out").textContent = eur(mUhr);
+      $("wd-marge-urh-out").className = mUhr >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-marge-box-out").textContent = boxOn ? eur(mBox) : "\u2013";
+      $("wd-marge-box-out").className = mBox >= 0 ? "wd-ok" : "wd-warn";
+      $("wd-lineBox").style.opacity = boxOn ? "1" : "0.55";
+      $("wd-marge-out").textContent = eur(mGes);
+      $("wd-marge-out").className = mGes >= 0 ? "wd-ok" : "wd-warn";
+    }
     if (mode === "marge") {
       var w = parseDe($("wd-marge").value) || 0;
-      var raw = cost + w;
+      var raw = cost + w + boxMargeSoll;
       var vk = step === 1 ? Math.round(raw * 100) / 100 : Math.ceil(raw / step) * step;
       var marge = vk - cost;
+      var mBox = boxOn ? boxMargeSoll : 0;
+      var mUhr = marge - mBox;
       var pct = vk > 0 ? (marge / vk * 100) : 0;
+      outSplit(marge, mBox, mUhr);
+      $("wd-main").style.color = "";  /* VK-Vorschlag zurück auf die Akzentfarbe */
       $("wd-cap").textContent = "Verkaufspreis-Vorschlag (" +
         (step === 1 ? "genau" : step + "er-Rundung") + ")";
       $("wd-main").textContent = eur(vk);
-      $("wd-marge-out").textContent = eur(marge);
-      $("wd-marge-out").className = marge >= 0 ? "wd-ok" : "wd-warn";
       $("wd-pct").textContent = pct.toFixed(1).replace(".", ",") + " %";
-      $("wd-hint").textContent = step === 1
-        ? "Exakter VK für Wunschmarge " + eur(w) + "."
-        : "Gerundet aufwärts auf die " + step + " → echte Marge " + eur(marge) +
-          " statt " + eur(w) + ". Ohne Rundung: " + eur(raw) + ".";
+      var hint = step === 1
+        ? "Exakter VK f\u00fcr Wunschmarge " + eur(w + boxMargeSoll) + "."
+        : "Gerundet aufw\u00e4rts auf die " + step + " \u2192 echte Marge " + eur(marge) +
+          " statt " + eur(w + boxMargeSoll) + ". Ohne Rundung: " + eur(raw) + ".";
+      $("wd-hint").textContent = hint + (boxOn
+        ? " Box-Marge " + eur(boxMargeSoll) + " bleibt fest \u2013 der Rest (inkl. Rundung) ist Uhr-Marge."
+        : "");
     } else {
       var vk2 = parseDe($("wd-vk").value) || 0;
       var m = vk2 - cost;
+      var mBox2 = boxOn ? boxMargeSoll : 0;
+      var mUhr2 = m - mBox2;
       var p = vk2 > 0 ? (m / vk2 * 100) : 0;
+      outSplit(m, mBox2, mUhr2);
       $("wd-cap").textContent = "Marge bei VK " + eur(vk2);
       $("wd-main").textContent = eur(m);
       $("wd-main").style.color = m >= 0 ? "#5fc98a" : "#e0716c";
-      $("wd-marge-out").textContent = eur(m);
-      $("wd-marge-out").className = m >= 0 ? "wd-ok" : "wd-warn";
       $("wd-pct").textContent = p.toFixed(1).replace(".", ",") + " %";
-      $("wd-hint").textContent = "Zum Vergleich: bei 150 € Marge müsste der VK " +
-        eur(cost + 150) + " lauten" +
-        (step > 1 ? " (gerundet " + eur(Math.ceil((cost + 150) / step) * step) + ")" : "") + ".";
+      var wu = parseDe($("wd-marge").value) || 0;
+      $("wd-hint").textContent = "Zum Vergleich: bei " + eur(wu + boxMargeSoll) +
+        " Marge m\u00fcsste der VK " + eur(cost + wu + boxMargeSoll) + " lauten" +
+        (step > 1 ? " (gerundet " +
+          eur(Math.ceil((cost + wu + boxMargeSoll) / step) * step) + ")" : "") + "." +
+        (boxOn ? " Box-Marge " + eur(boxMargeSoll) + " als Vorgabe, Rest = Uhr." : "");
     }
   }
   $("wd-modeM").addEventListener("click", function () { setMode("marge"); });
   $("wd-modeV").addEventListener("click", function () { setMode("vk"); });
+  function syncBoxMarge() {
+    var on = $("wd-box").checked;
+    $("wd-wrapBoxMarge").classList.toggle("wd-hidden", !on);
+    calc();
+  }
+  if ($("wd-marge-box")) $("wd-marge-box").addEventListener("input", calc);
   $("wd-preset").addEventListener("click", preset);
+  syncBoxMarge();
   ["wd-ek", "wd-zus", "wd-boxk", "wd-marge", "wd-vk"].forEach(function (id) {
     $(id).addEventListener("input", calc);
   });
-  $("wd-box").addEventListener("change", calc);
+  $("wd-box").addEventListener("change", syncBoxMarge);
   $("wd-round").addEventListener("change", calc);
   if ($("wd-cur")) {
     $("wd-cur").addEventListener("change", function () {

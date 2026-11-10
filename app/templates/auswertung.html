@@ -122,8 +122,12 @@
         <input id="wd-boxk" class="wd-small" inputmode="decimal">
       </div>
       <div id="wd-wrapMarge">
-        <label for="wd-marge">Gewünschte Marge (EUR)</label>
+        <label for="wd-marge">Gewünschte Marge Uhr (EUR)</label>
         <input id="wd-marge" inputmode="decimal" value="150,00">
+      </div>
+      <div id="wd-wrapBoxMarge" class="wd-hidden">
+        <label for="wd-marge-box">Gewünschte Marge Box (EUR)</label>
+        <input id="wd-marge-box" inputmode="decimal" placeholder="z. B. 30,00">
       </div>
       <div id="wd-wrapVk" style="display:none">
         <label for="wd-vk">Verkaufspreis (EUR)</label>
@@ -140,8 +144,10 @@
     <div class="wd-out">
       <div id="wd-cap" class="cap">Verkaufspreis-Vorschlag (5er-Rundung)</div>
       <div id="wd-main" class="main">–</div>
-      <div class="line"><span>Kostenbasis (EK + Zusatz + Box)</span><b id="wd-cost">–</b></div>
-      <div class="line"><span>Resultierende Marge</span><b id="wd-marge-out">–</b></div>
+      <div class="line"><span id="wd-costlbl">Kostenbasis (EK + Zusatz + Box)</span><b id="wd-cost">–</b></div>
+      <div class="line"><span>Resultierende Marge Uhr</span><b id="wd-marge-urh-out">–</b></div>
+      <div class="line" id="wd-lineBox"><span>Resultierende Marge Box</span><b id="wd-marge-box-out">–</b></div>
+      <div class="line"><span>Resultierende Marge Gesamt</span><b id="wd-marge-out">–</b></div>
       <div class="line"><span>Marge in % vom VK</span><b id="wd-pct">–</b></div>
       <p class="wd-note" id="wd-hint"></p>
     </div>
