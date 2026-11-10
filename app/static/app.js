@@ -835,3 +835,13 @@ document.addEventListener("submit", function (e) {
 
   reindex();
 })();
+
+// ---------- Auswertung: Serien im Chart ein-/ausblenden ----------
+document.addEventListener("change", function (event) {
+  var toggle = event.target.closest("[data-chart-toggle]");
+  if (!toggle) return;
+  var svg = toggle.closest(".wd-card") && toggle.closest(".wd-card").querySelector("svg");
+  if (!svg) return;
+  var group = svg.querySelector('[data-chart-series="' + toggle.getAttribute("data-chart-toggle") + '"]');
+  if (group) group.style.display = toggle.checked ? "" : "none";
+});

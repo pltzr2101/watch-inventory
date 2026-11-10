@@ -86,7 +86,12 @@ def _held_days(w: Watch, now: datetime) -> int:
     return max(0, (end - start).days)
 
 
-def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
+def dashboard(
+    db: Session,
+    period: str,
+    now: datetime | None = None,
+    chart: int | None = 12,
+) -> dict:
     """Alle Daten für /auswertung als reines Ergebnis-Dict (ints in Cents)."""
     # Naive UTC wie die DB (DateTime-Spalten speichern ohne Timezone)
     now = now or datetime.now(UTC).replace(tzinfo=None)
@@ -169,9 +174,20 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
     avg_held = round(sum(held) / len(held)) if held else None
 
     # Zeitreihe: letzte 12 Monate, Umsatz + Marge je Monat
+    # Zeitreihe des Diagramms: feste Monatszahl (6/12/24) oder „alle“ (None)
+    if chart is None:
+        oldest = min(
+            (s for w in sold_all if (s := _sold_when(w)) is not None), default=None
+        )
+        n_months = 12
+        if oldest is not None:
+            n_months = max(12, (now.year - oldest.year) * 12 + now.month - oldest.month + 1)
+    else:
+        n_months = max(1, min(60, int(chart)))
+
     months_series: list[dict] = []
     y, m = now.year, now.month
-    for _ in range(12):
+    for _ in range(n_months):
         label = f"{m:02d}/{str(y)[2:]}"
         ms = [
             w
@@ -246,6 +262,8 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
             "per_month": per_month,
         },
         "series": months_series,
+        "chart_months": n_months,
+        "chart_all": chart is None,
         "pipeline": pipe_rows,
         "top": top_rows,
         "calc_seed": {"ek": avg_ek, "extra": avg_extra, "box": avg_box},

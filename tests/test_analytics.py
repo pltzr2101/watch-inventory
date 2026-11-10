@@ -184,3 +184,38 @@ def test_nachgetragener_verkauf_zahlt_in_auswertung(auth_client) -> None:
         "Fallback status_changed_at greift nicht (Legacy ohne sold_at)"
     )
     assert "keine Verkäufe im Zeitraum" not in page
+
+
+def test_chart_zeitraum_und_y_achse(auth_client) -> None:
+    """Diagramm konfigurierbar: c=6|12|24|all, Y-Achsen-Ticks, Chip-Komposition
+    mit dem Hauptzeitraum, unbekannte Werte fallen auf12 zurück."""
+    html6 = auth_client.get("/auswertung?c=6").text
+    assert "6 Monate" in html6
+    from app.services.analytics import DEFAULT_PERIOD
+
+    assert f'href="?p={DEFAULT_PERIOD}&amp;c=6"' in html6  # Chips erben den Hauptzeitraum
+    html24 = auth_client.get("/auswertung?c=24").text
+    assert "24 Monate" in html24
+    html_all = auth_client.get("/auswertung?c=all").text
+    assert "alle Monate" in html_all
+    # Y-Achse: Tick-Labels mit text-anchor="end" und Gridlines
+    assert 'text-anchor="end"' in html6
+    assert "d.chart.ticks" not in html6  # kein ungerenderter Jinja-Rest
+    # Hauptzeitraum-Chips behalten den Chart-Zeitraum
+    assert 'href="?p=30&amp;c=6"' in html6
+    # Unbekannter Wert →12 (Default)
+    assert "12 Monate" in auth_client.get("/auswertung?c=quatsch").text
+
+
+def test_chart_serie_laenge_nach_param(auth_client) -> None:
+    """dashboard()-Serie folgt dem Chart-Parameter (6 vs.24 vs. alle)."""
+    from app.db import make_session_factory
+    from app.services import analytics
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        assert len(analytics.dashboard(db, "all", chart=6)["series"]) == 6
+        assert len(analytics.dashboard(db, "all", chart=24)["series"]) == 24
+        data_all = analytics.dashboard(db, "all", chart=None)
+        assert data_all["chart_all"] is True
+        assert data_all["chart_months"] >= 12
