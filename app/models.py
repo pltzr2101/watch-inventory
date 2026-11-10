@@ -103,6 +103,16 @@ BOX_OPTIONS: dict[str, str] = {
 }
 
 
+class AppSetting(Base):
+    """Einstellungs-Schlüssel-Wert (z. B. Box-Standard-VK) – textbasiert."""
+
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class BoxType(Base):
     """Box-Typ für das Box-Inventar (Bulk-Einkäufe, Durchschnitts-EK)."""
 

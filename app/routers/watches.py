@@ -17,7 +17,6 @@ from ..forms import (
     parse_watch_form,
 )
 from ..models import (
-    BOX_OPTIONS,
     BoxType,
     StatusEvent,
     Watch,
@@ -28,6 +27,7 @@ from ..money import MoneyError, format_money, format_percent, format_rate, parse
 from ..services import image_ingest
 from ..services.boxes import avg_unit_cost
 from ..services.boxes import overview as box_overview
+from ..settings_store import box_default_vk_display, box_options_for
 from ..templating import render
 from ..texts import CONDITION_OPTIONS, SHIPPING_OPTIONS, condition_text, shipping_text
 
@@ -175,7 +175,7 @@ def _watch_form_context(
         "values": values or {},
         "errors": errors or {},
         "statuses": list(WatchStatus),
-        "box_options": BOX_OPTIONS,
+        "box_options": box_options_for(db),
         "spec_fields": SPEC_FIELDS,
         "categories": categories,
         "condition_options": [(k, de) for k, de, _ in CONDITION_OPTIONS],
@@ -366,7 +366,7 @@ def _charge_ctx(db, form=None, errors: dict | None = None, charge_count: int = 2
     return {
         "categories": cats,
         "spec_fields": SPEC_FIELDS,
-        "box_options": BOX_OPTIONS,
+        "box_options": box_options_for(db),
         "condition_options": [(k, de) for k, de, _ in CONDITION_OPTIONS],
         "shipping_options": [(k, de) for k, de, _ in SHIPPING_OPTIONS],
         "errors": errors or {},
@@ -594,6 +594,7 @@ def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep
         condition_display=condition_text(watch.condition) or watch.condition,
         shipping_display=shipping_text(watch.shipping_info) or watch.shipping_info,
         box_types=box_dialog,
+        box_default_vk=box_default_vk_display(db),
     )
 
 

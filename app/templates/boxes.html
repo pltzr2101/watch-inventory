@@ -2,6 +2,16 @@
 {% block title %}Boxen – Watch-Inventory{% endblock %}
 {% block content %}
 <h1>Box-Inventar</h1>
+
+<form method="post" action="/boxes/settings/default-vk" class="filter-bar box-vk-setting">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="box_default_vk">Box-Standard-VK (EUR) – gilt als Anzeige „Box optional (+X €)“
+    im Uhr-Formular und als Vorschlag im Verkaufsdialog</label>
+  <input id="box_default_vk" name="box_default_vk" inputmode="decimal"
+         value="{{ box_default_vk }}" style="max-width:10rem">
+  <button type="submit" class="btn btn-primary btn-sm">Speichern</button>
+</form>
+
 <p class="muted">Bulk-Einkäufe je Box-Typ. <strong>Ø-EK</strong> = gewichteter Durchschnitt
   aller Einkäufe dieses Typs (bewusst kein FIFO – reicht bei Stapelbestellungen).
   <strong>Bestand</strong> = eingekaufte Boxen − Boxen bei aktuell als „Verkauft“

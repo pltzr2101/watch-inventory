@@ -232,7 +232,7 @@
         <label for="box_vk_share">VK-Anteil Box (EUR, optional)</label>
         <input id="box_vk_share" name="box_vk_share" inputmode="decimal"
                placeholder="z. B. 50,00"
-               value="{{ format_money(watch.box_vk_share_cents).replace(' €', '') if watch.box_vk_share_cents is not none else '' }}">
+               value="{{ format_money(watch.box_vk_share_cents).replace(' €', '') if watch.box_vk_share_cents is not none else box_default_vk }}">
         <p class="hint">Teil des Gesamt-VK. Ohne Angabe wird nur die Gesamtmarge
           (inkl. Ø-Box-EK) ausgewiesen; mit Angabe trennt die Detailseite
           Marge Uhr und Marge Box.</p>

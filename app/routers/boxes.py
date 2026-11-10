@@ -18,6 +18,7 @@ from ..forms import MoneyError, parse_money
 from ..models import BoxPurchase, BoxSale, BoxType, new_id, utcnow
 from ..money import RateError, format_money, format_rate, parse_rate, usd_to_eur
 from ..services.boxes import overview, unit_cost
+from ..settings_store import box_default_vk_display
 from ..templating import render
 
 router = APIRouter(tags=["boxes"])
@@ -79,6 +80,7 @@ def boxes_page(request: Request, db=DbDep):
     return render(
         request,
         "boxes.html",
+        box_default_vk=box_default_vk_display(db),
         rows=overview(db),
         purchases=_recent_purchases(db),
         sales=_recent_sales(db),
@@ -452,4 +454,30 @@ async def box_sale_delete(request: Request, sale_id: int, db=DbDep):
     db.delete(sale)
     db.commit()
     flash(request, f"Einzelverkauf gelöscht: {summary} – Bestand wieder hochgezählt.", "success")
+    return _redirect()
+
+
+@router.post("/boxes/settings/default-vk", dependencies=_MUTATE)
+async def box_default_vk_save(request: Request, db=DbDep):
+    """Standard-Verkaufspreis für Boxen (Label im Uhr-Formular, Vorschlag im Dialog)."""
+    from ..money import format_money, parse_money
+    from ..settings_store import KEY_BOX_DEFAULT_VK, set_setting
+
+    form = await request.form()
+    raw = str(form.get("box_default_vk") or "").strip()
+    try:
+        cents = parse_money(raw)
+    except Exception as exc:  # noqa: BLE001 – MoneyError sauber ans Formular
+        flash(request, str(exc), "error")
+        return _redirect()
+    if cents is None:
+        flash(request, "Bitte einen gültigen Betrag eingeben.", "error")
+        return _redirect()
+    set_setting(db, KEY_BOX_DEFAULT_VK, str(cents))
+    db.commit()
+    flash(
+        request,
+        f"Box-Standard-VK auf {format_money(cents)} gesetzt.",
+        "success",
+    )
     return _redirect()
