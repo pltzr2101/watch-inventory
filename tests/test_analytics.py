@@ -141,3 +141,46 @@ def test_dashboard_fills_kpis_from_active_stock_without_sales(auth_client) -> No
     assert "keine Verkäufe im Zeitraum" in body    # Marge/Haltedauer ehrlich
     # Kalkulator-Seed liegt als data-Attribut vor (CSP-konform)
     assert f'"ek": {eur_ek}' in body
+
+
+def test_nachgetragener_verkauf_zahlt_in_auswertung(auth_client) -> None:
+    """Nachgetragener Verkauf: sold_at muss gesetzt werden (Anlege-Route);
+    Legacy-Daten ohne sold_at zählen über den status_changed_at-Fallback.
+    (User-Report: Marge im Detail sichtbar, Auswertung zeigte „0“.)"""
+    from app.db import make_session_factory
+    from app.models import Watch, WatchStatus
+
+    # Fall A: direkt als VERKAUFT angelegt (Nachtrag)
+    from tests.conftest import create_watch
+
+    watch_id = create_watch(
+        auth_client,
+        sku="VK-NACH",
+        title="Nachgetragener Verkauf",
+        status="sold",
+        purchase_price="449,94",
+        sale_price="600,00",
+    )
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        watch = db.get(Watch, watch_id)  # type: ignore[arg-type]
+        assert watch is not None
+        assert watch.status == WatchStatus.SOLD
+        assert watch.sold_at is not None, "sold_at fehlt beim nachgetragenen Verkauf"
+
+    page = auth_client.get("/auswertung").text
+    assert "Verkauft im Zeitraum: 1" in page, "Auswertung zählt den Verkauf nicht"
+    assert "keine Verkäufe im Zeitraum" not in page
+
+    # Fall B: Legacy-Datum – Status verkauft, sold_at leer (bestehende Daten)
+    with Session() as db:
+        watch = db.query(Watch).filter(Watch.sku == "VK-NACH").one()
+        watch.sold_at = None
+        db.commit()
+
+    page = auth_client.get("/auswertung").text
+    assert "Verkauft im Zeitraum: 1" in page, (
+        "Fallback status_changed_at greift nicht (Legacy ohne sold_at)"
+    )
+    assert "keine Verkäufe im Zeitraum" not in page

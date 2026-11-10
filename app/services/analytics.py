@@ -63,6 +63,15 @@ def _extra_buckets(w: Watch, by_category: dict[str, str]) -> dict[str, int]:
     return out
 
 
+def _sold_when(w: Watch) -> datetime | None:
+    """Verkaufszeit; Legacy-Daten ohne sold_at fallen auf den Statuswechsel zurück."""
+    if w.sold_at is not None:
+        return w.sold_at
+    if w.status == WatchStatus.SOLD and w.status_changed_at is not None:
+        return w.status_changed_at
+    return None
+
+
 def _held_days(w: Watch, now: datetime) -> int:
     """Haltedauer: Ankunft DE → Verkauf (Entscheidung des Betreibers).
 
@@ -73,7 +82,7 @@ def _held_days(w: Watch, now: datetime) -> int:
         de_events = [e.changed_at for e in w.status_events if e.to_status == WatchStatus.IN_GERMANY]
         if de_events:
             start = min(de_events)
-    end = w.sold_at or now
+    end = _sold_when(w) or now
     return max(0, (end - start).days)
 
 
@@ -84,12 +93,12 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
     since = _since(period, now)
 
     all_watches = list(db.execute(select(Watch)).scalars().all())
-    sold_all = [w for w in all_watches if w.status == WatchStatus.SOLD and w.sold_at]
-    sold = [
-        w
-        for w in sold_all
-        if since is None or (w.sold_at is not None and w.sold_at >= since)
-    ]
+    sold_all = [w for w in all_watches if _sold_when(w) is not None]
+    sold = []
+    for w in sold_all:
+        when = _sold_when(w)
+        if since is None or (when is not None and when >= since):
+            sold.append(w)
     active = [w for w in all_watches if w.status != WatchStatus.SOLD]
 
     labels = dict(
@@ -147,14 +156,16 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
 
     # Verkäufe/Monat im Zeitraum
     if period == "all":
-        first = min((w.sold_at for w in sold_all if w.sold_at), default=None)
+        first = min(
+            (s for w in sold_all if (s := _sold_when(w)) is not None), default=None
+        )
         months = ((now - first).days / 30.44 + 1) if first else 1
     else:
         months = max(1.0, (PERIODS.get(period) or 90) / 30.44)
     per_month = round(len(sold) / months, 1) if months else 0.0
 
     # Ø Haltedauer der verkauften Uhren im Zeitraum (Ankunft DE → Verkauf)
-    held = [_held_days(w, now) for w in sold if w.sold_at]
+    held = [_held_days(w, now) for w in sold if _sold_when(w) is not None]
     avg_held = round(sum(held) / len(held)) if held else None
 
     # Zeitreihe: letzte 12 Monate, Umsatz + Marge je Monat
@@ -163,7 +174,9 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
     for _ in range(12):
         label = f"{m:02d}/{str(y)[2:]}"
         ms = [
-            w for w in sold_all if w.sold_at and w.sold_at.year == y and w.sold_at.month == m
+            w
+            for w in sold_all
+            if (s := _sold_when(w)) is not None and s.year == y and s.month == m
         ]
         um = sum(w.sale_price_cents or 0 for w in ms)
         mg = sum(m_ for w in ms if (m_ := margin_eur(w)) is not None)

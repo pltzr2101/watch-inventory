@@ -251,6 +251,8 @@ async def watch_new(request: Request, db=DbDep, settings=SettingsDep):
     watch.sku = values["sku"] or gen_sku(db)
     watch.status = WatchStatus(values["status"])
     watch.status_changed_at = utcnow()
+    if watch.status == WatchStatus.SOLD:
+        watch.sold_at = utcnow()
     db.add(watch)
     db.flush()
     watch.status_events.append(
