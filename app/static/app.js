@@ -171,9 +171,92 @@ document.addEventListener("click", function (event) {
     }
     out.textContent = parts.join("  →  ");
   }
+  var srcState = {};    // Position → Haken
+  var srcTouched = {};  // Position → Nutzer hat gehakt (dann gilt sein Wunsch)
+  function positionValueCents(key, cur) {
+    var rate = rateInput ? parseRate(rateInput.value) : null;
+    var cents = null;
+    if (key === "purchase") {
+      var pf = document.querySelector("[data-rate-usd]"); // Einkaufspreis = USD
+      cents = pf ? parseDe(pf.value) : null;
+      if (cents == null) return null;
+      if (cur === "EUR") return rate ? Math.round(cents * rate) : null;
+      return cents;
+    }
+    var row = wrap.querySelector('[data-cost-uid="' + key + '"]');
+    if (!row) return null;
+    var rcur = (row.querySelector(".cost-cur") || {}).value || "EUR";
+    var amtEl = row.querySelector(".cost-amount");
+    var pctEl = row.querySelector(".cost-pct");
+    var basisEl = row.querySelector(".cost-basis");
+    if (pctEl && pctEl.value.trim() && basisEl) {
+      var b = parseDe(basisEl.value);
+      var pp = parseDe(pctEl.value);
+      cents = b != null && pp != null ? Math.round((b * pp) / 10000) : null;
+    } else {
+      cents = amtEl ? parseDe(amtEl.value) : null;
+    }
+    if (cents == null) return null;
+    if (rcur === cur) return cents;
+    if (cur === "USD") return rate ? Math.round(cents / rate) : null;
+    return rate ? Math.round(cents * rate) : null;
+  }
+  function srcEntries() {
+    var list = [{ key: "purchase", label: "Einkauf (USD)" }];
+    wrap.querySelectorAll(".cost-row").forEach(function (r) {
+      if (r.dataset.insInsurance) return;
+      var cat = r.querySelector(".cost-cat");
+      if (!cat || !cat.value) return; // leere Zeilen bleiben aus der Hakenliste
+      var name = cat && cat.selectedOptions[0] ? cat.selectedOptions[0].textContent : "Position";
+      var cur = (r.querySelector(".cost-cur") || {}).value || "EUR";
+      list.push({ key: uidOf(r), label: name + " (" + cur + ")" });
+    });
+    return list;
+  }
+  function syncInsurance() {
+    wrap.querySelectorAll(".cost-row[data-ins-insurance]").forEach(function (row) {
+      var cur = (row.querySelector(".cost-cur") || {}).value || "EUR";
+      var pctEl = row.querySelector(".cost-pct");
+      var basisEl = row.querySelector(".cost-basis");
+      if (!basisEl || !pctEl) return;
+      var box = row.nextElementSibling;
+      if (!box || !box.classList.contains("ins-srcs")) {
+        box = document.createElement("div");
+        box.className = "ins-srcs";
+        row.after(box);
+      }
+      while (box.firstChild) box.removeChild(box.firstChild);
+      var total = 0;
+      srcEntries().forEach(function (entry) {
+        var key = entry.key;
+        var def = key === "purchase" || entry.label.slice(-5) === "(USD)";
+        if (!(key in srcState) || !srcTouched[key]) srcState[key] = def;
+        var lab = document.createElement("label");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!srcState[key];
+        cb.setAttribute("data-ins-src", key);
+        lab.appendChild(cb);
+        lab.appendChild(document.createTextNode(" " + entry.label));
+        box.appendChild(lab);
+        if (cb.checked) {
+          var v = positionValueCents(key, cur);
+          if (v != null) total += v;
+        }
+      });
+      if (pctEl.value.trim() && !row.dataset.insManual) {
+        basisEl.value = fmtCents(total);
+      } else if (!pctEl.value.trim()) {
+        delete row.dataset.insManual;
+      }
+    });
+  }
   function updateAll() {
     wrap.querySelectorAll(".cost-row").forEach(function (row) {
       syncMode(row);
+    });
+    syncInsurance();
+    wrap.querySelectorAll(".cost-row").forEach(function (row) {
       updatePreview(row);
     });
   }
@@ -197,10 +280,17 @@ document.addEventListener("click", function (event) {
     updateAll();
   }
 
+  var costUid = 0;
+  function uidOf(row) {
+    if (!row.dataset.costUid) row.dataset.costUid = String(++costUid);
+    return row.dataset.costUid;
+  }
   function makeRow() {
     if (!tpl) return null;
     var frag = tpl.content.cloneNode(true);
-    return frag.querySelector(".cost-row");
+    var row = frag.querySelector(".cost-row");
+    if (row) uidOf(row);
+    return row;
   }
 
   if (addBtn) {
@@ -217,6 +307,7 @@ document.addEventListener("click", function (event) {
     insBtn.addEventListener("click", function () {
       var row = makeRow();
       if (!row) return;
+      row.dataset.insInsurance = "1";
       var sel = row.querySelector(".cost-cat");
       if (sel) {
         for (var i = 0; i < sel.options.length; i++) {
@@ -232,6 +323,7 @@ document.addEventListener("click", function (event) {
       if (cur) cur.value = "USD";
       wrap.appendChild(row);
       renumber();
+      updateAll();
       var basis = row.querySelector(".cost-basis");
       if (basis) basis.focus();
     });
@@ -239,24 +331,49 @@ document.addEventListener("click", function (event) {
   wrap.addEventListener("click", function (event) {
     var btn = event.target.closest("[data-cost-remove]");
     if (!btn) return;
-    btn.closest(".cost-row").remove();
+    var dead = btn.closest(".cost-row");
+    var next = dead.nextElementSibling;
+    if (next && next.classList.contains("ins-srcs")) next.remove();
+    dead.remove();
     renumber();
+    updateAll();
   });
   wrap.addEventListener("input", function (event) {
     var row = event.target.closest(".cost-row");
     if (!row) return;
+    if (event.target.classList.contains("cost-basis") && row.dataset.insInsurance) {
+      row.dataset.insManual = "1"; // manuelle Basis überschreibt automatisch
+      updatePreview(row);
+      return;
+    }
+    if (row.dataset.insInsurance) delete row.dataset.insManual;
     syncMode(row);
-    updatePreview(row);
+    updateAll();
   });
   wrap.addEventListener("change", function (event) {
+    var src = event.target.getAttribute && event.target.getAttribute("data-ins-src");
+    if (src) {
+      srcState[src] = !!event.target.checked;
+      srcTouched[src] = true;
+      wrap.querySelectorAll(".cost-row[data-ins-insurance]").forEach(function (r) {
+        delete r.dataset.insManual;
+      });
+      updateAll();
+      return;
+    }
     var row = event.target.closest(".cost-row");
     if (!row) return;
-    updatePreview(row);
+    if (row.dataset.insInsurance) delete row.dataset.insManual;
+    updateAll();
   });
   if (rateInput) rateInput.addEventListener("input", updateAll);
+  var purchaseField = document.querySelector("[data-rate-usd]");
+  if (purchaseField) purchaseField.addEventListener("input", updateAll);
+  wrap.querySelectorAll(".cost-row").forEach(uidOf);
   var form = wrap.closest("form");
   if (form) form.addEventListener("submit", updateAll);
   renumber();
+  updateAll();
 })();
 
 // ---------- Uhr-Formular: Specs-Checkliste ----------

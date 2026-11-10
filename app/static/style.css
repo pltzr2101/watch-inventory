@@ -422,6 +422,10 @@ legend { font-weight: 560; font-size: 0.9rem; letter-spacing: 0.04em; padding: 0
 .cost-row { display: flex; gap: 0.55rem; align-items: center; }
 .cost-row input { flex: 1 1 7rem; min-width: 6rem; }
 .cost-row select { flex: 1 1 12rem; min-width: 11rem; }
+.ins-srcs { display: flex; flex-wrap: wrap; gap: 0.35rem 0.8rem; align-items: center;
+  font-size: 0.78rem; color: #8d93a1; padding: 0.15rem 0 0.35rem; }
+.ins-srcs label { display: inline-flex; gap: 0.3rem; align-items: center; cursor: pointer; }
+.ins-srcs input { width: auto; accent-color: #e8b84b; }
 .spec-row { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.45rem; }
 .spec-row .checkbox { margin: 0; flex: 0 0 auto; }
 .spec-row input[type="text"], .spec-row input:not([type]) { flex: 1 1 14rem; }
