@@ -144,7 +144,17 @@
     <div class="wd-out">
       <div id="wd-cap" class="cap">Verkaufspreis-Vorschlag (5er-Rundung)</div>
       <div id="wd-main" class="main">–</div>
-      <div class="line"><span id="wd-costlbl">Kostenbasis (EK + Zusatz + Box)</span><b id="wd-cost">–</b></div>
+      <div class="line wd-click" id="wd-costline" role="button" tabindex="0"
+           aria-expanded="false" aria-controls="wd-costdet">
+        <span><span id="wd-costlbl">Kostenbasis (EK + Zusatz + Box)</span><span
+              class="wd-caret" aria-hidden="true">▾</span></span>
+        <b id="wd-cost">–</b>
+      </div>
+      <div class="wd-costdet wd-hidden" id="wd-costdet">
+        <div class="line"><span>EK Uhr</span><b id="wd-cost-ek">–</b></div>
+        <div class="line"><span>Zusatzkosten</span><b id="wd-cost-zus">–</b></div>
+        <div class="line"><span>Box (Ø-EK)</span><b id="wd-cost-box">–</b></div>
+      </div>
       <div class="line"><span>Resultierende Marge Uhr</span><b id="wd-marge-urh-out">–</b></div>
       <div class="line" id="wd-lineBox"><span>Resultierende Marge Box</span><b id="wd-marge-box-out">–</b></div>
       <div class="line"><span>Resultierende Marge Gesamt</span><b id="wd-marge-out">–</b></div>

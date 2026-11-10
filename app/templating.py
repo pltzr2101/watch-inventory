@@ -23,6 +23,19 @@ _env = Environment(
     autoescape=select_autoescape(default_for_string=True, default=True),
     auto_reload=True,
 )
+def _static_ver(name: str) -> str:
+    """SHA1-Stempel der statischen Datei – bricht Browser-Caches bei Updates."""
+    try:
+        import hashlib
+
+        data = (Path(__file__).resolve().parent / "static" / name).read_bytes()
+        return hashlib.sha1(data).hexdigest()[:10]
+    except OSError:
+        return "0"
+
+
+_env.globals["js_ver"] = _static_ver("app.js")
+_env.globals["css_ver"] = _static_ver("style.css")
 _env.globals["format_money"] = format_money
 _env.globals["format_rate"] = format_rate
 _env.globals["fmt_dt"] = (

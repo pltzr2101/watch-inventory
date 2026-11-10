@@ -513,6 +513,10 @@ document.addEventListener("change", function (event) {
     var step = parseFloat($("wd-round").value) || 1;
     $("wd-costlbl").textContent = "Kostenbasis (EK + Zusatz" + (boxOn ? " + Box)" : ")");
     $("wd-cost").textContent = eur(cost);
+    $("wd-cost-ek").textContent = eur(ek);
+    $("wd-cost-zus").textContent = eur(zus);
+    $("wd-cost-box").textContent = boxOn ? eur(box) : "\u2013";
+    $("wd-cost-box").parentNode.style.opacity = boxOn ? "1" : "0.55";
     /* Split-Regel: die Box-Marge wird festgehalten; Uhr-Marge = Rest der
        Gesamt-Marge (Rundungsaufschlag landet bei der Uhr). */
     function outSplit(mGes, mBox, mUhr) {
@@ -574,6 +578,19 @@ document.addEventListener("change", function (event) {
   if ($("wd-marge-box")) $("wd-marge-box").addEventListener("input", calc);
   $("wd-preset").addEventListener("click", preset);
   syncBoxMarge();
+  var costLine = $("wd-costline");
+  if (costLine) {
+    var toggleCost = function () {
+      var hidden = $("wd-costdet").classList.toggle("wd-hidden");
+      costLine.setAttribute("aria-expanded", String(!hidden));
+      var car = costLine.querySelector(".wd-caret");
+      if (car) car.classList.toggle("open", !hidden);
+    };
+    costLine.addEventListener("click", toggleCost);
+    costLine.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleCost(); }
+    });
+  }
   ["wd-ek", "wd-zus", "wd-boxk", "wd-marge", "wd-vk"].forEach(function (id) {
     $(id).addEventListener("input", calc);
   });
