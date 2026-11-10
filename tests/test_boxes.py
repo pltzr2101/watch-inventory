@@ -484,3 +484,119 @@ def test_box_single_sale_lifecycle(auth_client) -> None:
         assert db.query(BoxSale).count() == 0
         row = next(r for r in overview(db) if r["label"] == "T-Sale")
         assert row["stock"] == 10
+
+
+def test_purchase_edit_cny_full_flow(auth_client) -> None:
+    """Edit wie Neuanlage: Quellwährung in der Anzeige, EIN Kurs für Ware und
+    Versand, Kurswechsel, Umstellung auf EUR (Prompt-Vorgabe Kompromiss)."""
+    import re as _re
+
+    from app.db import make_session_factory
+    from app.models import BoxPurchase
+    from tests.conftest import extract_csrf
+
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    auth_client.post(
+        "/boxes/types",
+        data={"label": "T-CNY", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        "/boxes/purchases",
+        data={
+            "box_type_id": _type_id(auth_client, "T-CNY"),
+            "quantity": "10",
+            "currency": "CNY",
+            "total_cost": "100,00",
+            "rate": "0,134",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        purchase = db.query(BoxPurchase).order_by(BoxPurchase.id.desc()).first()
+        assert purchase is not None
+        assert purchase.total_cost_cents == 1340  # 100 CNY × 0,134
+        pid = purchase.id
+
+    # Edit-Anzeige: Werte in CNY (Rückrechnung), Kurs vorausgefüllt, Select CNY
+    page = auth_client.get(f"/boxes?edit={pid}").text
+    assert f'value="{pid}"' not in page  # id nur in routes
+    assert 'data-base-ware="1340"' in page
+    m = _re.search(
+        r'name="total_cost" inputmode="decimal" value="([^"]+)"\s+data-base-ware', page
+    )
+    assert m and m.group(1) == "100,00", m.group(1) if m else "Feld fehlt"
+    m = _re.search(r'name="shipping_cost"[^>]*value="([^"]+)"', page)
+    assert m and m.group(1) == "0,00"
+    m = _re.search(r'name="rate"[^>]*value="([^"]+)"', page)
+    assert m and m.group(1).replace(",", ".") == "0.134"
+    assert '<option value="CNY" selected>CNY</option>' in page
+
+    # Kurswechsel: NEUER Kurs gilt für Ware UND Versand (eine Bestellung, ein Kurs)
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        f"/boxes/purchases/{pid}",
+        data={
+            "quantity": "10",
+            "currency": "CNY",
+            "total_cost": "100,00",
+            "shipping_cost": "20,00",
+            "rate": "0,150",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    with Session() as db:
+        purchase = db.get(BoxPurchase, pid)
+        assert purchase is not None
+        assert purchase.currency == "CNY"
+        assert purchase.rate_milli == 150
+        assert purchase.total_cost_cents == 1500  # 100 ×0,15
+        assert purchase.shipping_cents == 300  #20 ×0,15 – gleicher Kurs
+
+    # Kursfeld leer → gespeicherter Kurs-Snapshot wird übernommen
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    auth_client.post(
+        f"/boxes/purchases/{pid}",
+        data={
+            "quantity": "10",
+            "currency": "CNY",
+            "total_cost": "100,00",
+            "shipping_cost": "30,00",
+            "rate": "",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    with Session() as db:
+        purchase = db.get(BoxPurchase, pid)
+        assert purchase is not None
+        assert purchase.rate_milli == 150  # Alt-Kurs behalten
+        assert purchase.shipping_cents == 450  #30 ×0,15
+
+    # Umstellung auf EUR: direkteingabe, Kurs raus
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    auth_client.post(
+        f"/boxes/purchases/{pid}",
+        data={
+            "quantity": "10",
+            "currency": "EUR",
+            "total_cost": "44,00",
+            "shipping_cost": "10,00",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    with Session() as db:
+        purchase = db.get(BoxPurchase, pid)
+        assert purchase is not None
+        assert purchase.currency == "EUR"
+        assert purchase.rate_milli is None
+        assert purchase.total_cost_cents == 4400
+        assert purchase.shipping_cents == 1000

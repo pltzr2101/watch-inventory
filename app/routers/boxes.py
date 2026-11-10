@@ -28,6 +28,11 @@ def _redirect() -> RedirectResponse:
     return RedirectResponse(url="/boxes", status_code=303)
 
 
+def _de(value_cents: int) -> str:
+    """Cent → deutsche Eingabeform „28,35“ (ohne Währungszeichen)."""
+    return f"{value_cents / 100:.2f}".replace(".", ",")
+
+
 def _recent_purchases(db) -> list[dict]:  # type: ignore[no-untyped-def]
     rows = db.execute(
         select(BoxPurchase, BoxType.label)
@@ -35,21 +40,38 @@ def _recent_purchases(db) -> list[dict]:  # type: ignore[no-untyped-def]
         .order_by(BoxPurchase.bought_at.desc(), BoxPurchase.id.desc())
         .limit(25)
     ).all()
-    return [
-        {
-            "id": p.id,
-            "bought_at": p.bought_at,
-            "type_label": label,
-            "quantity": p.quantity,
-            "goods_cents": p.total_cost_cents,
-            "shipping_cents": p.shipping_cents or 0,
-            "unit": unit_cost(p.quantity, p.total_cost_cents, p.shipping_cents or 0),
-            "currency": p.currency or "EUR",
-            "rate": format_rate(p.rate_milli) if p.rate_milli else None,
-            "note": p.note,
-        }
-        for p, label in rows
-    ]
+    out = []
+    for p, label in rows:
+        cur = (p.currency or "EUR").upper()
+        # Edit-Felder zeigen die QUELLWÄHRUNG; gespeichert wird immer EUR.
+        if cur == "CNY" and p.rate_milli:
+            factor = p.rate_milli / 1000
+            goods_edit = _de(round((p.total_cost_cents or 0) / factor))
+            ship_edit = _de(round((p.shipping_cents or 0) / factor))
+            rate_edit = str(factor).replace(".", ",")
+        else:
+            cur = "EUR"  # CNY ohne Kurs (Legacy) → Felder zeigen den EUR-Stand
+            goods_edit = _de(p.total_cost_cents or 0)
+            ship_edit = _de(p.shipping_cents or 0)
+            rate_edit = format_rate(p.rate_milli).replace(",", ",") if p.rate_milli else ""
+        out.append(
+            {
+                "id": p.id,
+                "bought_at": p.bought_at,
+                "type_label": label,
+                "quantity": p.quantity,
+                "goods_cents": p.total_cost_cents,
+                "shipping_cents": p.shipping_cents or 0,
+                "unit": unit_cost(p.quantity, p.total_cost_cents, p.shipping_cents or 0),
+                "currency": cur,
+                "rate": format_rate(p.rate_milli) if p.rate_milli else None,
+                "rate_edit": rate_edit,
+                "goods_edit": goods_edit,
+                "ship_edit": ship_edit,
+                "note": p.note,
+            }
+        )
+    return out
 
 
 @router.get("/boxes")
@@ -286,8 +308,25 @@ async def box_purchase_edit(request: Request, purchase_id: int, db=DbDep):
         flash(request, "Versand darf nicht negativ sein.", "error")
         return _redirect()
 
-    if purchase.currency == "CNY":
-        rate = purchase.rate_milli or 1000
+    currency = str(form.get("currency") or purchase.currency or "EUR").upper().strip()
+    if currency not in ("EUR", "CNY"):
+        flash(request, "Währung nur EUR oder CNY.", "error")
+        return _redirect()
+
+    rate: int | None = None
+    if currency == "CNY":
+        # Ein Kurs gilt für Ware UND Versand dieses Einkaufs; bleibt das Feld
+        # leer, wird der bereits gespeicherte Kurs-Snapshot übernommen.
+        try:
+            rate = parse_rate(str(form.get("rate") or ""), min_milli=10, max_milli=5000)
+        except RateError as exc:
+            flash(request, f"Kurs: {exc}", "error")
+            return _redirect()
+        if rate is None:
+            rate = purchase.rate_milli
+        if rate is None:
+            flash(request, "Kurs erforderlich („Kurs holen“) – bei CNY-Änderung.", "error")
+            return _redirect()
         goods_eur = usd_to_eur(goods, rate) or 0
         shipping_eur = usd_to_eur(shipping, rate) or 0
     else:
@@ -296,13 +335,17 @@ async def box_purchase_edit(request: Request, purchase_id: int, db=DbDep):
     purchase.quantity = quantity
     purchase.total_cost_cents = goods_eur
     purchase.shipping_cents = shipping_eur
+    purchase.currency = currency
+    purchase.rate_milli = rate
     purchase.note = str(form.get("note") or "").strip()[:80] or None
     db.commit()
     flash(
         request,
-        f"Einkauf aktualisiert: {quantity}× – Ware {format_money(goods_eur)}, "
+        f"Einkauf aktualisiert: {quantity}× ({currency}) – Ware {format_money(goods_eur)}, "
         f"Versand {format_money(shipping_eur)} → Ø "
-        f"{format_money(unit_cost(quantity, goods_eur, shipping_eur))}/Box.",
+        f"{format_money(unit_cost(quantity, goods_eur, shipping_eur))}/Box"
+        + (f" (Kurs {format_rate(rate)})" if rate else "")
+        + ".",
         "success",
     )
     return RedirectResponse(

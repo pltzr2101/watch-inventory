@@ -9,7 +9,7 @@
 
 <div class="card">
   <h2>Einkauf erfassen</h2>
-  <form method="post" action="/boxes/purchases" class="row-form">
+  <form method="post" action="/boxes/purchases" class="row-form" data-box-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <select name="box_type_id" required aria-label="Box-Typ">
       <option value="">– Typ –</option>
@@ -18,15 +18,15 @@
       {% endfor %}
     </select>
     <input name="quantity" inputmode="numeric" placeholder="Menge (z. B. 10)" required>
-    <select name="currency" id="box-cur" aria-label="Eingabewährung">
+    <select name="currency" data-cur aria-label="Eingabewährung">
       <option value="EUR" selected>EUR</option>
       <option value="CNY">CNY</option>
     </select>
     <input name="total_cost" inputmode="decimal" placeholder="Ware gesamt (z. B. 80,00)" required>
     <input name="shipping_cost" inputmode="decimal" placeholder="Versand der Bestellung (z. B. 40,00)">
-    <span id="box-rate-group" class="wd-hidden" style="gap:.4rem;align-items:center">
-      <input name="rate" id="box-rate" inputmode="decimal" placeholder="Kurs CNY→EUR (z. B. 0,127)">
-      <button type="button" class="btn btn-sm" id="box-rate-btn">Kurs holen</button>
+    <span class="rate-group wd-hidden" data-rate-group style="gap:.4rem;align-items:center">
+      <input name="rate" class="rate-input" data-rate-input inputmode="decimal" placeholder="Kurs CNY→EUR (z. B. 0,127)">
+      <button type="button" class="btn btn-sm" data-rate-btn>Kurs holen</button>
     </span>
     <input name="note" maxlength="80" placeholder="Notiz (optional)">
     <button class="btn btn-primary" type="submit">Einkauf speichern</button>
@@ -120,26 +120,39 @@
         <td class="td-act">
           <details class="edit-details" id="edit-{{ p.id }}"{% if request.query_params.get("edit") == p.id|string %} open{% endif %}>
             <summary class="btn btn-xs">Bearbeiten</summary>
-            <form method="post" action="/boxes/purchases/{{ p.id }}" class="edit-form">
+            <form method="post" action="/boxes/purchases/{{ p.id }}" class="edit-form" data-box-form>
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <label>Menge
                 <input name="quantity" inputmode="numeric" value="{{ p.quantity }}" required>
               </label>
-              <label>Ware gesamt ({{ p.currency }})
-                <input name="total_cost" inputmode="decimal"
-                       value="{{ '%.2f'|format(p.goods_cents / 100)|replace('.', ',') }}" required>
+              <label>Währung
+                <select name="currency" data-cur>
+                  <option value="EUR"{% if p.currency != "CNY" %} selected{% endif %}>EUR</option>
+                  <option value="CNY"{% if p.currency == "CNY" %} selected{% endif %}>CNY</option>
+                </select>
               </label>
-              <label>Versand der Bestellung (EUR)
-                <input name="shipping_cost" inputmode="decimal"
-                       value="{{ '%.2f'|format(p.shipping_cents / 100)|replace('.', ',') }}">
+              <label>Ware gesamt
+                <input name="total_cost" inputmode="decimal" value="{{ p.goods_edit }}"
+                       data-base-ware="{{ p.goods_cents }}" required>
+              </label>
+              <span class="rate-group{% if p.currency != "CNY" %} wd-hidden{% endif %}"
+                    data-rate-group style="gap:.4rem;align-items:center">
+                <input name="rate" class="rate-input" data-rate-input inputmode="decimal"
+                       value="{{ p.rate_edit }}" placeholder="Kurs CNY→EUR (z. B. 0,134)">
+                <button type="button" class="btn btn-sm" data-rate-btn>Kurs holen</button>
+              </span>
+              <label>Versand der Bestellung
+                <input name="shipping_cost" inputmode="decimal" value="{{ p.ship_edit }}"
+                       data-base-versand="{{ p.shipping_cents }}">
               </label>
               <label>Notiz
                 <input name="note" maxlength="80" value="{{ p.note or '' }}">
               </label>
               <p class="muted" style="margin:.2rem 0 .4rem;font-size:.82rem">
-                Währung/Kurs: {% if p.currency == "CNY" %}CNY @ {{ p.rate }} (Kurs-Snapshot, unveränderlich)
-                {% else %}EUR{% endif %} · Änderungen wirken auf Ø-EK/Bestand sofort;
-                gespeicherte Verkaufs-Snapshots bleiben unangetastet.</p>
+                Ein Kurs gilt für <strong>Ware und Versand</strong> dieses Einkaufs. Kursfeld leer
+                lassen = gespeicherten Kurs behalten; „Kurs holen“ setzt den Kurs für beide
+                Positionen neu. Bei EUR-Wechsel stehen die hinterlegten EUR-Beträge im Feld.
+                Ø-EK/Bestand wirken sofort; Verkaufs-Snapshots bleiben unangetastet.</p>
               <div class="edit-actions">
                 <button class="btn btn-primary btn-sm" type="submit">Speichern</button>
               </div>

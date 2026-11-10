@@ -565,8 +565,8 @@ details[open] summary { margin-bottom: 0.4rem; }
 .row-form { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
 
 /* Box-Einkauf: CNY-Kursgruppe (nur bei Währung CNY sichtbar) */
-#box-rate-group.wd-hidden { display: none; }
-#box-rate-group { gap: 0.4rem; align-items: center; }
+.rate-group.wd-hidden { display: none; }
+.rate-group { gap: 0.4rem; align-items: center; }
 
 /* ===== Auswertungs-Dashboard (V5, /auswertung) – CSP-konform als Datei ===== */
 .wd-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 16px 0; }
@@ -622,8 +622,8 @@ table.wd-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tab
   .row-form { flex-direction: column; align-items: stretch; }
   .row-form input, .row-form select { width: 100%; box-sizing: border-box; }
   .row-form .btn { width: 100%; min-height: 44px; justify-content: center; }
-  #box-rate-group { width: 100%; flex-wrap: wrap; }
-  #box-rate { flex: 1 1 8rem; box-sizing: border-box; }
+  .rate-group { width: 100%; flex-wrap: wrap; }
+  .rate-group .rate-input { flex: 1 1 8rem; box-sizing: border-box; }
 
   .btn { min-height: 40px; }
   .btn-xs { min-height: 36px; padding: 0.35rem 0.7rem; }

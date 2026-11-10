@@ -400,32 +400,52 @@ document.addEventListener("change", function (event) {
   refreshMoveButtons();
 })();
 
-/* ===== Box-Einkauf (V5): Währungsumschalter + CNY-Kurs holen ===== */
+/* ===== Box-Einkaufs-Formulare: Währungswechsel + CNY-Kurs (pro Formular) ===== */
 (function () {
-  var cur = document.getElementById("box-cur");
-  var group = document.getElementById("box-rate-group");
-  var btn = document.getElementById("box-rate-btn");
-  var rate = document.getElementById("box-rate");
-  if (!cur || !group) return;
-  function sync() { group.classList.toggle("wd-hidden", cur.value !== "CNY"); }
-  cur.addEventListener("change", sync);
-  sync();
-  if (btn && rate) {
-    btn.addEventListener("click", function () {
-      btn.disabled = true;
-      btn.textContent = "…";
-      fetch("/api/fx-rate?cur=cny")
-        .then(function (r) {
-          return r.json().then(function (d) {
-            if (!r.ok) throw new Error(d.detail || String(r.status));
-            return d;
-          });
-        })
-        .then(function (d) { rate.value = d.rate; })
-        .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
-        .then(function () { btn.disabled = false; btn.textContent = "Kurs holen"; });
-    });
-  }
+  function toDe(cents) { return (cents / 100).toFixed(2).replace(".", ","); }
+  Array.prototype.forEach.call(document.querySelectorAll("form[data-box-form]"), function (form) {
+    var cur = form.querySelector("[data-cur]");
+    var group = form.querySelector("[data-rate-group]");
+    if (!cur || !group) return;
+    var rateIn = form.querySelector("[data-rate-input]");
+    var wareIn = form.querySelector("[data-base-ware]");
+    var versIn = form.querySelector("[data-base-versand]");
+    function sync() { group.classList.toggle("wd-hidden", cur.value !== "CNY"); }
+    /* Umschalter zeigt die Felder in der gewählten Währung; Basis ist der
+       gespeicherte EUR-Stand (data-base) – ein Kurs gilt für beide Felder. */
+    function refill() {
+      if (!wareIn || !versIn) return;
+      var baseW = Number(wareIn.getAttribute("data-base-ware"));
+      var baseS = Number(versIn.getAttribute("data-base-versand"));
+      var r = rateIn ? parseFloat(String(rateIn.value || "").replace(",", ".")) : 0;
+      if (cur.value === "CNY" && r > 0) {
+        wareIn.value = toDe(Math.round(baseW / r));
+        versIn.value = toDe(Math.round(baseS / r));
+      } else {
+        wareIn.value = toDe(baseW);
+        versIn.value = toDe(baseS);
+      }
+    }
+    cur.addEventListener("change", function () { sync(); refill(); });
+    sync();
+    var btn = form.querySelector("[data-rate-btn]");
+    if (btn && rateIn) {
+      btn.addEventListener("click", function () {
+        btn.disabled = true;
+        btn.textContent = "…";
+        fetch("/api/fx-rate?cur=cny")
+          .then(function (r) {
+            return r.json().then(function (d) {
+              if (!r.ok) throw new Error(d.detail || String(r.status));
+              return d;
+            });
+          })
+          .then(function (d) { rateIn.value = d.rate; })
+          .catch(function (e) { alert("Kurs nicht verfügbar: " + e.message); })
+          .then(function () { btn.disabled = false; btn.textContent = "Kurs holen"; });
+      });
+    }
+  });
 })();
 
 /* ===== Auswertung (V5): Live-VK/Margen-Kalkulator ohne Seitenwechsel ===== */
