@@ -17,7 +17,7 @@ from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import BoxPurchase, BoxType, Watch, WatchStatus
+from ..models import BoxPurchase, BoxSale, BoxType, Watch, WatchStatus
 
 
 def avg_unit_cost(db: Session, box_type_id: str) -> int | None:
@@ -66,6 +66,14 @@ def overview(db: Session) -> list[dict]:
             )
             or 0
         )
+        resold = int(
+            db.scalar(
+                select(func.coalesce(func.sum(BoxSale.quantity), 0)).where(
+                    BoxSale.box_type_id == t.id
+                )
+            )
+            or 0
+        )
         purchased = int(qty)
         combined = int(total) + int(ship)
         avg = None
@@ -79,7 +87,8 @@ def overview(db: Session) -> list[dict]:
                 "archived_at": t.archived_at,
                 "purchased": purchased,
                 "sold": sold,
-                "stock": purchased - sold,
+                "stock": purchased - sold - resold,
+                "resold": resold,
                 "avg": avg,
                 "goods_spend": int(total),
                 "shipping_spend": int(ship),

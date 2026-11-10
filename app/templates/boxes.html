@@ -80,6 +80,26 @@
   {% endif %}
 </div>
 
+<div class="card">
+  <h2>Boxen einzeln verkaufen</h2>
+  <form method="post" action="/boxes/sales" class="row-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <select name="box_type_id" required aria-label="Box-Typ">
+      <option value="">– Typ –</option>
+      {% for row in rows if not row.archived_at and row.stock > 0 %}
+      <option value="{{ row.id }}">{{ row.label }} ({{ row.stock }} auf Lager)</option>
+      {% endfor %}
+    </select>
+    <input name="quantity" inputmode="numeric" placeholder="Menge (z. B. 1)" required>
+    <input name="sale_price" inputmode="decimal" placeholder="Erlös gesamt (optional, z. B. 18,00)">
+    <input name="note" maxlength="80" placeholder="Notiz (optional)">
+    <button class="btn btn-primary" type="submit">Verkauf erfassen</button>
+  </form>
+  <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">
+    Minderert den Bestand zusätzlich zu Boxen bei verkauften Uhren; der Erlös
+    erscheint in der Auswertung („Boxen verkauft im Zeitraum“).</p>
+</div>
+
 {% if purchases %}
 <div class="card">
   <h2>Letzte Einkäufe</h2>
@@ -127,6 +147,34 @@
           </details>
           <form method="post" action="/boxes/purchases/{{ p.id }}/delete" class="act-form"
                 data-confirm="Diesen Einkauf ({{ p.quantity }}× {{ p.type_label }}) wirklich löschen?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-xs btn-danger" type="submit">Löschen</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if sales %}
+<div class="card">
+  <h2>Verkaufte Einzelboxen</h2>
+  <table class="tbl-stack">
+    <thead><tr><th>Wann</th><th>Typ</th><th>Menge</th><th>Erlös</th>
+        <th>Notiz</th><th>Aktionen</th></tr></thead>
+    <tbody>
+      {% for s in sales %}
+      <tr>
+        <td data-label="Wann">{{ fmt_dt(s.sold_at) }}</td>
+        <td data-label="Typ">{{ s.type_label }}</td>
+        <td data-label="Menge">{{ s.quantity }}</td>
+        <td data-label="Erlös">{{ format_money(s.price_cents) if s.price_cents else "—" }}</td>
+        <td data-label="Notiz">{{ s.note or "—" }}</td>
+        <td class="td-act">
+          <form method="post" action="/boxes/sales/{{ s.id }}/delete" class="act-form"
+                data-confirm="Einzelverkauf ({{ s.quantity }}× {{ s.type_label }}) löschen und den Bestand hochzählen?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="btn btn-xs btn-danger" type="submit">Löschen</button>
           </form>

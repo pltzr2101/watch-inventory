@@ -15,7 +15,7 @@ from ..csrf import verify_csrf
 from ..deps import DbDep, SettingsDep
 from ..flash import flash
 from ..forms import MoneyError, parse_money
-from ..models import BoxPurchase, BoxType, new_id, utcnow
+from ..models import BoxPurchase, BoxSale, BoxType, new_id, utcnow
 from ..money import RateError, format_money, format_rate, parse_rate, usd_to_eur
 from ..services.boxes import overview, unit_cost
 from ..templating import render
@@ -37,6 +37,7 @@ def _recent_purchases(db) -> list[dict]:  # type: ignore[no-untyped-def]
     ).all()
     return [
         {
+            "id": p.id,
             "bought_at": p.bought_at,
             "type_label": label,
             "quantity": p.quantity,
@@ -58,6 +59,7 @@ def boxes_page(request: Request, db=DbDep):
         "boxes.html",
         rows=overview(db),
         purchases=_recent_purchases(db),
+        sales=_recent_sales(db),
     )
 
 
@@ -324,4 +326,87 @@ async def box_purchase_delete(request: Request, purchase_id: int, db=DbDep):
         "Snapshots bereits verkaufter Uhren bleiben unverändert.",
         "success",
     )
+    return _redirect()
+
+
+def _recent_sales(db) -> list[dict]:  # type: ignore[no-untyped-def]
+    rows = db.execute(
+        select(BoxSale, BoxType.label)
+        .join(BoxType, BoxSale.box_type_id == BoxType.id)
+        .order_by(BoxSale.sold_at.desc(), BoxSale.id.desc())
+        .limit(25)
+    ).all()
+    return [
+        {
+            "id": s.id,
+            "sold_at": s.sold_at,
+            "type_label": label,
+            "quantity": s.quantity,
+            "price_cents": s.sale_price_cents,
+            "note": s.note,
+        }
+        for s, label in rows
+    ]
+
+
+@router.post("/boxes/sales", dependencies=_MUTATE)
+async def box_sale_new(request: Request, db=DbDep):
+    """Einzelverkauf von Boxen; prüft den verfügbaren Bestand des Typs."""
+    form = await request.form()
+    type_id = str(form.get("box_type_id") or "").strip()
+    box_type = db.get(BoxType, type_id) if type_id else None
+    if box_type is None:
+        flash(request, "Bitte einen Box-Typ wählen.", "error")
+        return _redirect()
+    try:
+        quantity = int(str(form.get("quantity") or "0"))
+    except ValueError:
+        quantity = 0
+    if quantity < 1 or quantity > 9999:
+        flash(request, "Menge muss zwischen 1 und 9999 liegen.", "error")
+        return _redirect()
+    stock = next((r["stock"] for r in overview(db) if r["id"] == box_type.id), 0)
+    if quantity > stock:
+        flash(
+            request,
+            f"Nur {stock}× {box_type.label} auf Lager (Verkauf nicht erfasst).",
+            "error",
+        )
+        return _redirect()
+    try:
+        price = parse_money(str(form.get("sale_price") or "") or "")
+    except MoneyError as exc:
+        flash(request, f"Erlös: {exc}", "error")
+        return _redirect()
+    price = price or 0
+    if price < 0:
+        flash(request, "Erlös darf nicht negativ sein.", "error")
+        return _redirect()
+    sale = BoxSale(
+        box_type_id=box_type.id,
+        quantity=quantity,
+        sale_price_cents=price if price > 0 else None,
+        note=str(form.get("note") or "").strip()[:80] or None,
+        sold_at=utcnow(),
+    )
+    db.add(sale)
+    db.commit()
+    msg = f"Einzelverkauf: {quantity}× {box_type.label}"
+    if sale.sale_price_cents:
+        msg += f" – Erlös {format_money(sale.sale_price_cents)}"
+    flash(request, msg + ".", "success")
+    return _redirect()
+
+
+@router.post("/boxes/sales/{sale_id}/delete", dependencies=_MUTATE)
+async def box_sale_delete(request: Request, sale_id: int, db=DbDep):
+    sale = db.get(BoxSale, sale_id)
+    if sale is None:
+        flash(request, "Verkaufseintrag fehlt.", "error")
+        return _redirect()
+    label = sale.box_type.label if sale.box_type else "?"
+    summary = f"{sale.quantity}× {label}"
+    db.delete(sale)
+    db.commit()
+    flash(request, f"Einzelverkauf gelöscht: {summary} – Bestand wieder hochgezählt.", "success")
     return _redirect()

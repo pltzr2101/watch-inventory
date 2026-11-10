@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..models import CostCategory, Watch, WatchStatus
+from ..models import BoxSale, CostCategory, Watch, WatchStatus
 from .boxes import overview as box_overview
 
 #: Zeitraumfilter (Tage) für KPIs/Listen; die Zeitreihe zeigt immer 12 Monate.
@@ -136,6 +136,15 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
     stock_value = sum(_purchase_eur(w) + _extra_total(w) for w in active_with_val)
     n_non_archived = len(non_archived)
 
+    # Box-Einzelverkäufe im Zeitraum (Erlös optional); „Alle“ ohne Untergrenze
+    box_sale_q = select(BoxSale).where(BoxSale.sold_at <= now)
+    _sale_since = _since(period, now)
+    if _sale_since is not None:
+        box_sale_q = box_sale_q.where(BoxSale.sold_at >= _sale_since)
+    box_sale_rows = db.scalars(box_sale_q).all()
+    box_sold_count = sum(s.quantity for s in box_sale_rows)
+    box_revenue = sum(s.sale_price_cents or 0 for s in box_sale_rows)
+
     # Verkäufe/Monat im Zeitraum
     if period == "all":
         first = min((w.sold_at for w in sold_all if w.sold_at), default=None)
@@ -208,6 +217,8 @@ def dashboard(db: Session, period: str, now: datetime | None = None) -> dict:
             "avg_ek": avg_ek,
             "n_base": n_base,
             "n_non_archived": n_non_archived,
+            "box_sold_count": box_sold_count,
+            "box_revenue": box_revenue,
             "avg_extra": avg_extra,
             "avg_insurance": avg_ins,
             "avg_shipping": avg_ship,

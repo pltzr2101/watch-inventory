@@ -355,6 +355,35 @@ class WatchExtraCost(Base):
         return self.category.label if self.category is not None else "—"
 
 
+class BoxSale(Base):
+    """Einzelverkauf von Boxen außerhalb eines Uhrenverkaufs.
+
+    Minderert den Box-Bestand (zusätzlich zu Boxen bei verkauften Uhren);
+    der optionale Erlös fließt in die Auswertung ein.
+    """
+
+    __tablename__ = "box_sales"
+    __table_args__ = (
+        CheckConstraint("quantity > 0", name="ck_box_sale_qty"),
+        CheckConstraint(
+            "sale_price_cents IS NULL OR sale_price_cents >= 0",
+            name="ck_box_sale_price",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    box_type_id: Mapped[str] = mapped_column(
+        ForeignKey("box_types.id", ondelete="RESTRICT"), index=True
+    )
+    quantity: Mapped[int] = mapped_column(Integer)
+    sale_price_cents: Mapped[int | None] = mapped_column(Integer)
+    note: Mapped[str | None] = mapped_column(String(200))
+    sold_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    box_type: Mapped[BoxType] = relationship()
+
+
 class StatusEvent(Base):
     __tablename__ = "status_events"
 

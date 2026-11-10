@@ -358,9 +358,16 @@ def test_purchase_edit_shipping_and_delete(auth_client) -> None:
         assert purchase.note == "nachgetragen"
         assert purchase.quantity == 10
 
-    # Löschen (Bestätigungs-Button im UI)
+    # Löschen (Bestätigungs-Button im UI) – AUCH die aus der Page generierte
+    # Action-URL muss numerisch sein (Regression: p.id fehlte im Dict →
+    # "/boxes/purchases//delete" → 404 im Browser)
     page = auth_client.get("/boxes").text
     assert "wirklich löschen" in page
+    import re as _re
+
+    ids = _re.findall(r'action="/boxes/purchases/(\d+)"', page)
+    assert ids, "keine numerische purchase-id in den Action-URLs"
+    assert f'action="/boxes/purchases/{ids[0]}/delete"' in page
     r = auth_client.post(
         f"/boxes/purchases/{pid}/delete",
         data={"csrf_token": extract_csrf(auth_client.get("/boxes").text)},
@@ -379,3 +386,101 @@ def _type_id(auth_client, label: str) -> str:
     with Session() as db:
         row = db.query(BoxType).filter(BoxType.label == label).one()
         return str(row.id)
+
+
+def test_box_single_sale_lifecycle(auth_client) -> None:
+    """Einzelverkauf: Bestand mindert sich, Erlös fließt ins Dashboard,
+    Über-Bestand wird abgelehnt, Löschen zählt zurück."""
+    import re as _re
+
+    from app.db import make_session_factory
+    from app.models import BoxSale
+    from app.services.boxes import overview
+    from tests.conftest import extract_csrf
+
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        "/boxes/types",
+        data={"label": "T-Sale", "csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        "/boxes/purchases",
+        data={
+            "box_type_id": _type_id(auth_client, "T-Sale"),
+            "quantity": "10",
+            "currency": "EUR",
+            "total_cost": "80,00",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        row = next(r for r in overview(db) if r["label"] == "T-Sale")
+        assert row["stock"] == 10
+
+    # 1) Verkauf 5× mit Erlös 90,00
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        "/boxes/sales",
+        data={
+            "box_type_id": _type_id(auth_client, "T-Sale"),
+            "quantity": "5",
+            "sale_price": "90,00",
+            "note": "einzeln",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    with Session() as db:
+        row = next(r for r in overview(db) if r["label"] == "T-Sale")
+        assert row["stock"] == 5
+        sale = db.query(BoxSale).one()
+        assert sale.sale_price_cents == 9000
+
+    page = auth_client.get("/boxes").text
+    assert "Verkaufte Einzelboxen" in page
+    assert "90,00 €" in page
+    sale_ids = _re.findall(r'action="/boxes/sales/(\d+)/delete"', page)
+    assert sale_ids, "keine numerische Sale-ID in der Page"
+
+    # 2) Dashboard: Stückzahl + Erlös im Zeitraum
+    dash = auth_client.get("/auswertung").text
+    assert "Boxen verkauft (Zeitraum)" in dash
+    assert "5 Stk" in dash
+    assert "Erlös 90,00 €" in dash
+
+    # 3) Über-Bestand wird abgelehnt (kein neuer Eintrag)
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        "/boxes/sales",
+        data={
+            "box_type_id": _type_id(auth_client, "T-Sale"),
+            "quantity": "99",
+            "csrf_token": csrf,
+        },
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    assert "Nur 5×" in auth_client.get("/boxes").text
+    with Session() as db:
+        assert db.query(BoxSale).count() == 1
+
+    # 4) Löschen zählt den Bestand zurück
+    csrf = extract_csrf(auth_client.get("/boxes").text)
+    r = auth_client.post(
+        f"/boxes/sales/{sale_ids[0]}/delete",
+        data={"csrf_token": csrf},
+        follow_redirects=False,
+    )
+    assert r.status_code == 303
+    with Session() as db:
+        assert db.query(BoxSale).count() == 0
+        row = next(r for r in overview(db) if r["label"] == "T-Sale")
+        assert row["stock"] == 10

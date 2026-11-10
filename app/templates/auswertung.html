@@ -28,6 +28,9 @@
     <div class="dlt">inkl. Bestellversand</div></div>
   <div class="wd-kpi"><div class="lbl">Box-Bestandswert</div><div class="val">{{ format_money(d.kpi.box_value) }}</div>
     <div class="dlt">Bestand × Ø je Typ</div></div>
+  <div class="wd-kpi"><div class="lbl">Boxen verkauft (Zeitraum)</div>
+    <div class="val">{{ d.kpi.box_sold_count }} Stk</div>
+    <div class="dlt">{% if d.kpi.box_revenue %}Erlös {{ format_money(d.kpi.box_revenue) }}{% else %}Einzelverkäufe (Erlös optional){% endif %}</div></div>
   <div class="wd-kpi"><div class="lbl">Ø Marge / Stück</div>
     <div class="val">{{ format_money(d.kpi.avg_margin) if d.kpi.avg_margin is not none else "–" }}</div>
     <div class="dlt">{% if d.kpi.avg_pct is not none %}{{ d.kpi.avg_pct }} % vom VK · verkauft im Zeitraum{% else %}keine Verkäufe im Zeitraum{% endif %}</div></div>

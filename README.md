@@ -192,3 +192,12 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
   EUR-Direkteingabe funktioniert weiterhin).
 - Gespeichert wird immer der EUR-Betrag plus Kurs-Snapshot (3 Nachkommastellen,
   CNY-Bereich 0,010–5,000 statt USD-Plausibilität 0,5–5,0).
+
+### Boxen: Einzelverkauf
+
+Neben Boxen, die automatisch bei „Verkauft“ markierten Uhren aus dem Bestand
+fallen, erfasst der Reiter **Boxen** eigene Einzelverkäufe (`Boxen einzeln
+verkaufen`): Menge, optionaler Erlös, Notiz. Der Bestand wird nur bis zur
+tatsächlich verfügbaren Menge verkauft; Löschen zählt den Bestand zurück.
+Erlöse und Stückzahlen fließen als „Boxen verkauft (Zeitraum)“ ins Dashboard
+ein; gespeicherte Ø-EK-Snapshots verkaufter Uhren bleiben unangetastet.
