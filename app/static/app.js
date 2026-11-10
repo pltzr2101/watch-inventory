@@ -597,11 +597,12 @@ document.addEventListener("change", function (event) {
   $("wd-box").addEventListener("change", syncBoxMarge);
   $("wd-round").addEventListener("change", calc);
   if ($("wd-cur")) {
-    $("wd-cur").addEventListener("change", function () {
+    var syncRate = function () {
       var g = $("wd-rate-group");
       if (g) g.classList.toggle("wd-hidden", $("wd-cur").value !== "USD");
-      calc();
-    });
+    };
+    $("wd-cur").addEventListener("change", function () { syncRate(); calc(); });
+    syncRate();
   }
   if ($("wd-rate")) $("wd-rate").addEventListener("input", calc);
   if ($("wd-rate-btn")) {
