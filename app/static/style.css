@@ -680,3 +680,5 @@ table.wd-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tab
   .wd-bars .bar { max-width: 100%; }
   .wd-seg button { min-height: 42px; }
 }
+
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0.5rem 1.1rem; }

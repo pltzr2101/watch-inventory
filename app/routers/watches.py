@@ -318,6 +318,216 @@ def usd_rate(settings=SettingsDep):
     return {"rate": format_rate(rate_milli), "rate_milli": rate_milli}
 
 
+# ---------- Charge-Erfassung (Baustein B: Mehrfach-Einkauf) ----------
+
+
+def _split_even(total_cents: int, n: int) -> list[int]:
+    """Verteilt Cent gleichmäßig; der Rest geht auf die letzten Positionen."""
+    base, rest = divmod(total_cents, n)
+    return [base + (1 if i >= n - rest else 0) for i in range(n)]
+
+
+class _PrefixedForm:
+    """Sicht auf form-Felder mit Präfix („w0_“) – parse_watch_form bleibt unverändert."""
+
+    def __init__(self, form, prefix: str) -> None:
+        self._form = form
+        self._prefix = prefix
+
+    def get(self, key, default=None):  # type: ignore[no-untyped-def]
+        value = self._form.get(self._prefix + key, default)
+        if key == "title" and not str(value or "").strip():
+            brand = str(self._form.get(self._prefix + "brand") or "").strip()
+            model = str(self._form.get(self._prefix + "model") or "").strip()
+            combined = f"{brand} {model}".strip()
+            return combined or default
+        return value
+
+
+def _cat_default(choices: list, *needles: str) -> str:
+    for row in choices:
+        text = str(row["label"] or "").lower()
+        if any(n in text for n in needles):
+            return row["id"]
+    return choices[0]["id"] if choices else ""
+
+
+def _charge_ctx(db, form=None, errors: dict | None = None, charge_count: int = 2) -> dict:
+    # SPEC_FIELDS liegt modulweit vor (wie im normalen Formular-Kontext).
+    cats = category_choices(db)
+    valid = {c["id"] for c in cats}
+
+    def fv(key: str) -> str:
+        return str(form.get(key) or "") if form is not None else ""
+
+    def posted(key: str, default: str) -> str:
+        return fv(key) or default
+
+    return {
+        "categories": cats,
+        "spec_fields": SPEC_FIELDS,
+        "box_options": BOX_OPTIONS,
+        "condition_options": [(k, de) for k, de, _ in CONDITION_OPTIONS],
+        "shipping_options": [(k, de) for k, de, _ in SHIPPING_OPTIONS],
+        "errors": errors or {},
+        "fv": fv,
+        "charge_count": max(1, min(20, charge_count)),
+        "cat_ship": posted("charge_cat_ship", _cat_default(cats, "versand")),
+        "cat_wise": posted("charge_cat_wise", _cat_default(cats, "wise", "weise", "gebühr")),
+        "cat_ins": posted("charge_cat_ins", _cat_default(cats, "versicherung")),
+        "valid_cat_ids": valid,
+        "charge_rate": posted("charge_rate", ""),
+        "charge_shipping": posted("charge_shipping", ""),
+        "charge_wise": posted("charge_wise", ""),
+        "charge_ins_on": form is None
+        or str(form.get("charge_ins_on") or "") in {"on", "1", "true"},
+        "charge_ins_pct": posted("charge_ins_pct", "6"),
+        "charge_ins_cur": posted("charge_ins_cur", "USD"),
+        "charge_label": posted("charge_label", ""),
+    }
+
+
+@router.get("/watches/charge")
+def charge_form(request: Request, db=DbDep, n: int = 2):  # type: ignore[no-untyped-def]
+    return render(request, "watch_charge.html", **_charge_ctx(db, charge_count=n))
+
+
+@router.post("/watches/charge", dependencies=_MUTATE)
+async def charge_create(request: Request, db=DbDep):  # type: ignore[no-untyped-def]
+    from datetime import date as _date
+
+    from ..forms import parse_percent
+    from ..money import parse_money, parse_rate, percent_amount, usd_to_eur
+
+    form = await request.form()
+    try:
+        count = int(str(form.get("charge_count") or "0"))
+    except ValueError:
+        count = 0
+    count = max(1, min(20, count))
+    ctx = _charge_ctx(db, form=form, errors={}, charge_count=count)
+    errors: dict[str, str] = ctx["errors"]
+    valid_cat_ids = ctx["valid_cat_ids"]
+
+    try:
+        rate = parse_rate(str(form.get("charge_rate") or ""), min_milli=500, max_milli=5000)
+    except Exception as exc:  # noqa: BLE001 – RateError-Text sauber ans Formular
+        errors["charge_rate"] = str(exc)
+        rate = None
+    if rate is None and "charge_rate" not in errors:
+        errors["charge_rate"] = "Kurs erforderlich (ein Kurs pro Charge)."
+
+    ship_usd = parse_money(str(form.get("charge_shipping") or "")) or 0
+    wise_eur = parse_money(str(form.get("charge_wise") or "")) or 0
+    ins_on = str(form.get("charge_ins_on") or "") in {"on", "1", "true"}
+    ins_pct: int | None = None
+    if ins_on:
+        try:
+            ins_pct = parse_percent(str(form.get("charge_ins_pct") or ""))  # type: ignore[arg-type]
+        except Exception as exc:  # noqa: BLE001
+            errors["charge_ins_pct"] = str(exc)
+        if ins_pct is None and "charge_ins_pct" not in errors:
+            errors["charge_ins_pct"] = "Prozentwert fehlt."
+    ins_cur = "EUR" if str(form.get("charge_ins_cur") or "USD") == "EUR" else "USD"
+
+    cat_ship = str(form.get("charge_cat_ship") or "")
+    cat_wise = str(form.get("charge_cat_wise") or "")
+    cat_ins = str(form.get("charge_cat_ins") or "")
+    for key, val in (("Versand", cat_ship), ("Gebühren", cat_wise), ("Versicherung", cat_ins)):
+        if val not in valid_cat_ids:
+            errors["charge_cats"] = f"Unbekannte Kostenkategorie ({key})."
+            break
+
+    label = str(form.get("charge_label") or "").strip()[:80] or f"Einkauf {_date.today():%Y-%m-%d}"
+
+    # Erst alle Cluster validieren, dann anlegen (Transaktion bleibt leer bei Fehlern)
+    parsed: list[dict] = []
+    for i in range(count):
+        pf = _PrefixedForm(form, f"w{i}_")
+        values, werr = parse_watch_form(pf, valid_cat_ids)
+        if werr:
+            errors.update({f"uhr{i + 1}_{k}": str(v) for k, v in werr.items()})
+            continue
+        parsed.append(values)
+
+    if errors:
+        return render(
+            request,
+            "watch_charge.html",
+            status_code=400,
+            **_charge_ctx(db, form=form, errors=errors, charge_count=count),
+        )
+
+    from ..models import StatusEvent, Watch, WatchStatus
+
+    ship_parts = _split_even(ship_usd, count)
+    wise_parts = _split_even(wise_eur, count)
+    created: list[Watch] = []
+    for i, values in enumerate(parsed):
+        ek_usd = values.get("purchase_price_usd") or 0
+        costs = list(values.get("extra_costs") or [])
+        if ship_usd:
+            costs.append(
+                {"category_id": cat_ship, "currency": "USD",
+                 "amount_cents": ship_parts[i], "basis_cents": None, "percent_milli": None}
+            )
+        if wise_eur:
+            costs.append(
+                {"category_id": cat_wise, "currency": "EUR",
+                 "amount_cents": wise_parts[i], "basis_cents": None, "percent_milli": None}
+            )
+        if ins_on and ins_pct:
+            basis_usd = ek_usd + ship_parts[i]
+            basis_i = (usd_to_eur(basis_usd, rate) or 0) if ins_cur == "EUR" else basis_usd
+            costs.append(
+                {"category_id": cat_ins, "currency": ins_cur,
+                 "amount_cents": percent_amount(basis_i, ins_pct),
+                 "basis_cents": basis_i, "percent_milli": ins_pct}
+            )
+        values["extra_costs"] = costs
+
+        watch = Watch()
+        apply_watch_values(watch, values)
+        watch.sku = values["sku"] or gen_sku(db)
+        watch.status = WatchStatus(values.get("status") or "in_transit")
+        watch.status_changed_at = utcnow()
+        watch.purchase_batch = label
+        watch.status_events.append(
+            StatusEvent(from_status=None, to_status=watch.status, note=f"Charge: {label}")
+        )
+        db.add(watch)
+        db.flush()
+        created.append(watch)
+    db.commit()
+
+    def _eur(cents: int, cur: str) -> str:
+        eur = cents if cur == "EUR" else (usd_to_eur(cents, rate) or 0)
+        from ..money import format_money as _fm
+
+        return _fm(eur)
+
+    parts = []
+    if ship_usd:
+        parts.append(f"Versand {_eur(ship_usd, 'USD')}")
+    if wise_eur:
+        parts.append(f"Gebühren {_eur(wise_eur, 'EUR')}")
+    if ins_on and ins_pct:
+        from ..money import format_percent as _fp
+
+        total_ins = sum(
+            c.amount_cents for c in created[0].extra_costs if c.category_id == cat_ins
+        )
+        parts.append(f"Versicherung {_eur(total_ins, ins_cur)} ({_fp(ins_pct)})")
+    flash(
+        request,
+        f"Charge „{label}“: {len(created)} Uhren angelegt"
+        + (" – " + ", ".join(parts) + " anteilig" if parts else "")
+        + ". Fotos bitte an den Uhren nachreichen.",
+        "success",
+    )
+    return _redirect(f"/watches/{created[0].id}")
+
+
 @router.get("/watches/{watch_id}")
 def watch_detail(request: Request, watch_id: str, db=DbDep, settings=SettingsDep):
     watch = load_watch(db, watch_id)
@@ -587,3 +797,5 @@ async def watch_import_approve(request: Request, watch_id: str, db=DbDep):
 
 
 __all__ = ["router", "set_status", "_redirect"]
+
+

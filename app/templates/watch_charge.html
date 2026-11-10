@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% block title %}Charge erfassen – Watch-Inventory{% endblock %}
+{% block content %}
+<h1>Charge erfassen</h1>
+<p class="muted">Mehrfach-Einkauf: Gemeinschaftskosten einmal erfassen – der Server teilt sie anteilig
+  auf alle Uhren. Jede Uhr wird ein eigener Bestandseintrag; Fotos hinterlegst du danach am jeweiligen Detail.</p>
+
+{% if errors %}
+<div class="form-errors" role="alert">
+  <strong>Bitte prüfen:</strong>
+  <ul>{% for _k, v in errors.items() %}<li>{{ v }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% macro icrow(i, j) %}
+  <div class="ic-row" data-ic-row>
+    <select name="w{{ i }}_extra_cost_category_{{ j }}" aria-label="Kategorie">
+      <option value="">– Kategorie –</option>
+      {% for cat in categories %}{% if not cat.archived %}
+      <option value="{{ cat.id }}">{{ cat.label }}</option>{% endif %}{% endfor %}
+    </select>
+    <select name="w{{ i }}_extra_cost_currency_{{ j }}" aria-label="Währung">
+      <option value="USD">USD</option>
+      <option value="EUR" selected>EUR</option>
+    </select>
+    <input name="w{{ i }}_extra_cost_amount_{{ j }}" inputmode="decimal" placeholder="Betrag" aria-label="Betrag">
+    <input name="w{{ i }}_extra_cost_basis_{{ j }}" inputmode="decimal" placeholder="Basis" aria-label="Basis">
+    <input name="w{{ i }}_extra_cost_pct_{{ j }}" inputmode="decimal" placeholder="%" aria-label="Prozent">
+    <button type="button" class="btn btn-xs" data-ic-remove aria-label="Position entfernen">✕</button>
+  </div>
+{% endmacro %}
+
+{% macro cluster(i) %}
+  <div class="charge-cluster" data-cluster>
+    <h3 class="cluster-h">Uhr <span data-cluster-no>{{ i }}</span>
+      <span class="muted cluster-sub">Stammtdaten, Einkauf, Verkauf, Zustand</span></h3>
+    <input type="hidden" name="w{{ i }}_status" value="in_transit">
+    <input type="hidden" name="w{{ i }}_usd_eur_rate" value="{{ charge_rate }}">
+    <div class="grid2">
+      <div><label for="w{{ i }}_sku">Artikelnummer (leer = automatisch)</label>
+        <input id="w{{ i }}_sku" name="w{{ i }}_sku" value="{{ fv('w' ~ i ~ '_sku') }}"></div>
+      <div><label for="w{{ i }}_brand">Marke *</label>
+        <input id="w{{ i }}_brand" name="w{{ i }}_brand" maxlength="120" required
+               value="{{ fv('w' ~ i ~ '_brand') }}"></div>
+      <div><label for="w{{ i }}_model">Modell *</label>
+        <input id="w{{ i }}_model" name="w{{ i }}_model" maxlength="160" required
+               value="{{ fv('w' ~ i ~ '_model') }}"></div>
+      <div><label for="w{{ i }}_title">Titel (leer = Marke + Modell)</label>
+        <input id="w{{ i }}_title" name="w{{ i }}_title" maxlength="200"
+               value="{{ fv('w' ~ i ~ '_title') }}"></div>
+      <div><label for="w{{ i }}_purchase_price">Einkaufspreis USD *</label>
+        <input id="w{{ i }}_purchase_price" name="w{{ i }}_purchase_price" inputmode="decimal"
+               required value="{{ fv('w' ~ i ~ '_purchase_price') }}"></div>
+      <div><label for="w{{ i }}_target_price">Geplanter VK (EUR)</label>
+        <input id="w{{ i }}_target_price" name="w{{ i }}_target_price" inputmode="decimal"
+               value="{{ fv('w' ~ i ~ '_target_price') }}"></div>
+      <div><label for="w{{ i }}_sale_price">Tatsächlicher VK (EUR)</label>
+        <input id="w{{ i }}_sale_price" name="w{{ i }}_sale_price" inputmode="decimal"
+               value="{{ fv('w' ~ i ~ '_sale_price') }}"></div>
+    </div>
+
+    <p class="ic-head">Individuelle Kostenpositionen dieser Uhr (optional – z. B. DHL innerhalb DE)</p>
+    <div class="ic-wrap" data-ic-wrap>
+      <input type="hidden" name="w{{ i }}_extra_cost_rows" value="1" data-ic-count>
+      {{ icrow(i, 0) }}
+    </div>
+    <button type="button" class="btn btn-sm" data-ic-add>+ Weitere Kosten</button>
+
+    <div class="grid2" style="margin-top:.6rem">
+      <div><label>Zustand</label>
+        <select name="w{{ i }}_condition">
+          <option value="">— nicht angegeben —</option>
+          {% for key, label in condition_options %}
+          <option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select></div>
+      <div><label>Box</label>
+        <select name="w{{ i }}_box">
+          <option value="">– nicht angegeben –</option>
+          {% for value, label in box_options.items() %}
+          <option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select></div>
+      <div><label>Versandinfo</label>
+        <select name="w{{ i }}_shipping_info">
+          <option value="">— nicht angegeben —</option>
+          {% for key, label in shipping_options %}
+          <option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select></div>
+      <div><label>Zustandsnotiz (nur intern)</label>
+        <input name="w{{ i }}_condition_note" maxlength="120"
+               value="{{ fv('w' ~ i ~ '_condition_note') }}"></div>
+    </div>
+
+    {% if spec_fields %}
+    <p class="ic-head">Technische Daten (Haken = Feld ist Pflicht)</p>
+    {% for key, label in spec_fields %}
+    <div class="spec-row">
+      <label class="spec-toggle"><input type="checkbox" name="w{{ i }}_spec_on_{{ key }}"> {{ label }}</label>
+      <input name="w{{ i }}_spec_{{ key }}" maxlength="200" placeholder="{{ label }} eintragen">
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <label style="margin-top:.6rem">Interne Notizen (niemals in Anzeigen)</label>
+    <textarea name="w{{ i }}_internal_notes" rows="2">{{ fv('w' ~ i ~ '_internal_notes') }}</textarea>
+  </div>
+{% endmacro %}
+
+<form method="post" data-charge-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="charge_count" value="{{ charge_count }}" data-charge-count>
+
+  <fieldset>
+    <legend>Gemeinsame Einkaufsdaten</legend>
+    <div class="grid2">
+      <div><label for="charge_label">Bezeichnung der Charge (leer = automatisch)</label>
+        <input id="charge_label" name="charge_label" maxlength="80"
+               placeholder="z. B. Einkauf 2026-11-10" value="{{ charge_label }}"></div>
+      <div><label for="charge_rate">Kurs USD → EUR für die Charge *</label>
+        <input id="charge_rate" name="charge_rate" inputmode="decimal" required
+               placeholder="z. B. 0,8930" value="{{ charge_rate }}">
+        {% if errors.get("charge_rate") %}<span class="field-error">{{ errors.charge_rate }}</span>{% endif %}</div>
+      <div><label for="charge_shipping">Versand gesamt (USD) – wird anteilig geteilt</label>
+        <input id="charge_shipping" name="charge_shipping" inputmode="decimal"
+               placeholder="z. B. 100,00" value="{{ charge_shipping }}"></div>
+      <div><label for="charge_wise">Wise-/Bankgebühren gesamt (EUR) – wird anteilig geteilt</label>
+        <input id="charge_wise" name="charge_wise" inputmode="decimal"
+               placeholder="z. B. 9,65" value="{{ charge_wise }}"></div>
+    </div>
+
+    <div class="charge-ins">
+      <label class="charge-ins-main"><input type="checkbox" name="charge_ins_on"
+        {% if charge_ins_on %}checked{% endif %}> Versicherung auf <strong>EK + Versand</strong></label>
+      <input name="charge_ins_pct" inputmode="decimal" value="{{ charge_ins_pct }}"
+             aria-label="Prozentwert" class="charge-ins-pct">
+      <select name="charge_ins_cur" aria-label="Währung Versicherung" class="charge-ins-cur">
+        <option value="USD" {% if charge_ins_cur == "USD" %}selected{% endif %}>USD</option>
+        <option value="EUR" {% if charge_ins_cur == "EUR" %}selected{% endif %}>EUR</option>
+      </select>
+      <span class="muted">je Uhr: % × (EK + Versandanteil), EK-basiert – Prozentsatz und Währung frei</span>
+      {% if errors.get("charge_ins_pct") %}<span class="field-error">{{ errors.charge_ins_pct }}</span>{% endif %}
+    </div>
+
+    <details class="charge-cats">
+      <summary>Kostenkategorien der Charge (Vorauswahl anpassbar)</summary>
+      <p class="muted">Legt fest, unter welcher Kategorie die anteiligen Positionen an den Uhren erscheinen.</p>
+      <label>Versand
+        <select name="charge_cat_ship">
+          {% for c in categories %}
+          <option value="{{ c.id }}" {% if c.id == cat_ship %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select></label>
+      <label>Gebühren
+        <select name="charge_cat_wise">
+          {% for c in categories %}
+          <option value="{{ c.id }}" {% if c.id == cat_wise %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select></label>
+      <label>Versicherung
+        <select name="charge_cat_ins">
+          {% for c in categories %}
+          <option value="{{ c.id }}" {% if c.id == cat_ins %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select></label>
+      {% if errors.get("charge_cats") %}<span class="field-error">{{ errors.charge_cats }}</span>{% endif %}
+    </details>
+  </fieldset>
+
+  <fieldset>
+    <legend>Uhren der Charge</legend>
+    <div data-clusters>
+      {% for i in range(charge_count) %}
+      {{ cluster(i) }}
+      {% endfor %}
+    </div>
+    <button type="button" class="btn btn-sm" data-cluster-add>＋ Weitere Uhr</button>
+
+    <div class="charge-actions" style="margin-top:1rem">
+      <button type="submit" class="btn btn-primary">Charge speichern</button>
+      <a class="btn" href="/watches">Abbrechen</a>
+    </div>
+  </fieldset>
+</form>
+
+<template data-cluster-tpl>{{ cluster('__IDX__') }}</template>
+{% endblock %}

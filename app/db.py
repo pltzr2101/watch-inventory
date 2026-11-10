@@ -54,6 +54,7 @@ def ensure_schema(engine: Engine) -> None:
         "ALTER TABLE watches ADD COLUMN highlight VARCHAR(160)",
         "ALTER TABLE watches ADD COLUMN purchase_price_usd_cents INTEGER",
         "ALTER TABLE watches ADD COLUMN usd_eur_rate_milli INTEGER",
+        "ALTER TABLE watches ADD COLUMN purchase_batch VARCHAR(80)",
     ):
         name = ddl.rsplit(" ", 1)[-1]
         if name not in columns:

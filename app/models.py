@@ -268,6 +268,9 @@ class Watch(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
     sold_at: Mapped[datetime | None] = mapped_column(DateTime)
+    #: Charge-/Bestellungslabel (z. B. „Einkauf 2026-11-10“) – gruppiert Uhren
+    #: desselben Sammel-Einkaufs; keine eigene Entität, nur das Text-Label.
+    purchase_batch: Mapped[str | None] = mapped_column(String(80))
 
     images: Mapped[list[WatchImage]] = relationship(
         back_populates="watch",

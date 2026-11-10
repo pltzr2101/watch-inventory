@@ -749,3 +749,89 @@ document.addEventListener("submit", function (e) {
     e.preventDefault();
   }
 });
+
+// ---------- Charge-Formular: Uhren-Cluster & individuelle Kosten ----------
+(function () {
+  var form = document.querySelector("[data-charge-form]");
+  if (!form) return;
+  var clustersBox = form.querySelector("[data-clusters]");
+  // <template> liegt bewusst außerhalb des <form> (kein Submit-Feld) → global suchen
+  var clusterTpl = document.querySelector("[data-cluster-tpl]");
+  var countEl = form.querySelector("[data-charge-count]");
+
+  function reindex() {
+    var list = clustersBox.querySelectorAll("[data-cluster]");
+    countEl.value = String(list.length);
+    list.forEach(function (cluster, i) {
+      var no = cluster.querySelector("[data-cluster-no]");
+      if (no) no.textContent = String(i + 1);
+      cluster.querySelectorAll("[name]").forEach(function (el) {
+        el.name = el.name.replace(/^w\d+_/, "w" + i + "_");
+      });
+      var wrap = cluster.querySelector("[data-ic-wrap]");
+      if (!wrap) return;
+      var rows = wrap.querySelectorAll("[data-ic-row]");
+      rows.forEach(function (row, j) {
+        row.querySelectorAll("[name]").forEach(function (el) {
+          el.name = el.name.replace(/^(w\d+_extra_cost_\w+_)\d+$/, "$1" + j);
+        });
+      });
+      var hidden = wrap.querySelector("[data-ic-count]");
+      if (hidden) hidden.value = String(rows.length);
+    });
+  }
+
+  function clusterIdx(el) {
+    var name = (el.querySelector("[name]") || {}).name || "";
+    var m = name.match(/^w(\d+)_/);
+    return m ? m[1] : "0";
+  }
+
+  form.addEventListener("click", function (event) {
+    if (event.target.closest("[data-cluster-add]")) {
+      var idx = String(clustersBox.querySelectorAll("[data-cluster]").length);
+      var holder = document.createElement("div");
+      holder.innerHTML = clusterTpl.innerHTML.split("__IDX__").join(idx);
+      var node = holder.firstElementChild;
+      clustersBox.appendChild(node);
+      reindex();
+      var first = node.querySelector("input, select");
+      if (first) first.focus();
+      return;
+    }
+    if (event.target.closest("[data-ic-add]")) {
+      var addBtn = event.target.closest("[data-ic-add]");
+      var cluster = addBtn.closest("[data-cluster]");
+      var wrap = cluster.querySelector("[data-ic-wrap]");
+      var ci = clusterIdx(cluster);
+      var j = String(wrap.querySelectorAll("[data-ic-row]").length);
+      var tpl = wrap.querySelector("[data-ic-row]");
+      var frag = document.createElement("div");
+      frag.innerHTML = tpl.outerHTML;
+      var row = frag.firstElementChild;
+      row.querySelectorAll("[name]").forEach(function (el) {
+        el.name = el.name.replace(/^(w\d+_extra_cost_\w+_)\d+$/, "$1" + j);
+      });
+      wrap.appendChild(row);
+      reindex();
+      var sel = row.querySelector("select");
+      if (sel) sel.focus();
+      return;
+    }
+    if (event.target.closest("[data-ic-remove]")) {
+      var dead = event.target.closest("[data-ic-row]");
+      var w = dead.closest("[data-ic-wrap]");
+      if (w.querySelectorAll("[data-ic-row]").length <= 1) {
+        dead.querySelectorAll("input, select").forEach(function (el) {
+          if (el.tagName === "SELECT") el.selectedIndex = 0;
+          else el.value = "";
+        });
+        return;
+      }
+      dead.remove();
+      reindex();
+    }
+  });
+
+  reindex();
+})();
