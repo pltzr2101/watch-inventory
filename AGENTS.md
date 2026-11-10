@@ -40,6 +40,8 @@
   setsid nohup python3 -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8107 &`
 
 ## Wissens-Ablage
-- Projekt-Memory/Tagebücher: `.openhands/memory/` (im Repo getrackt; keine
-  Secrets dort – beim Schreiben prüfen). User-weite Memory: `/home/openhands/.openhands/memory/`.
+- Projekt-Memory/Tagebücher: `.openhands/memory/` – **bewusst NICHT im Repo**
+  (dieses Repo ist öffentlich; interne Details bleiben lokal/privat). Wichtiges,
+  public-taugliches landet in DIESER Datei. User-weite Memory:
+  `/home/openhands/.openhands/memory/`.
 - Prompt-Bibliothek (Rahmen bei jeder Aufgabe): `~/.openhands/skills/prompt-bibliothek/`.
