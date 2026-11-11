@@ -11,6 +11,16 @@
   <a class="wd-chip {{ 'on' if d.period == '90' }}" href="?p=90&amp;c={{ d.chart_period }}">90 T</a>
   <a class="wd-chip {{ 'on' if d.period == '365' }}" href="?p=365&amp;c={{ d.chart_period }}">12 Monate</a>
   <a class="wd-chip {{ 'on' if d.period == 'all' }}" href="?p=all&amp;c={{ d.chart_period }}">Alles</a>
+  <details class="wd-chip wd-chip-custom {{ 'on' if d.period == 'custom' }}">
+    <summary>Eigener Zeitraum</summary>
+    <form method="get" class="wd-custom-form">
+      <input type="hidden" name="c" value="{{ d.chart_period }}">
+      <label>von <input type="date" name="von" value="{{ d.custom.von }}" required></label>
+      <label>bis <input type="date" name="bis" value="{{ d.custom.bis }}" required></label>
+      <button class="btn btn-primary btn-sm" type="submit">Anwenden</button>
+    </form>
+  </details>
+  {% if d.custom_error %}<span class="field-error">{{ d.custom_error }}</span>{% endif %}
   <span style="flex:1"></span>
   <span class="wd-chip" title="Phase 2">Verkauft im Zeitraum: {{ d.kpi.sold_count }}</span>
 </div>
@@ -34,6 +44,9 @@
   <div class="wd-kpi"><div class="lbl">Ø Marge / Stück</div>
     <div class="val">{{ format_money(d.kpi.avg_margin) if d.kpi.avg_margin is not none else "–" }}</div>
     <div class="dlt">{% if d.kpi.avg_pct is not none %}{{ d.kpi.avg_pct }} % vom VK · verkauft im Zeitraum{% else %}keine Verkäufe im Zeitraum{% endif %}</div></div>
+  <div class="wd-kpi"><div class="lbl">Deckungsbeitrag (Zeitraum)</div>
+    <div class="val">{{ format_money(d.db_total) }}</div>
+    <div class="dlt">Summe über verkaufte Uhren</div></div>
   <div class="wd-kpi"><div class="lbl">Ø Haltedauer</div>
     <div class="val">{{ (d.kpi.avg_held ~ " T") if d.kpi.avg_held is not none else "–" }}</div>
     <div class="dlt">{% if d.kpi.avg_held is not none %}verkaufte Uhren · Ankunft DE → Verkauf{% else %}keine Verkäufe im Zeitraum{% endif %}</div></div>
@@ -115,7 +128,64 @@
   </div>
 </div>
 
-<div class="wd-card">
+<div class="wd-card" data-panel="sales">
+    <h2>Verkäufe im Zeitraum
+      <a class="btn btn-sm" style="float:right"
+         href="/auswertung/verkaeufe.csv?{{ d.csv_query }}">Als CSV laden</a></h2>
+    {% if d.sales_rows %}
+    <table class="table wd-sortable">
+      <thead><tr>
+        <th data-sort="date">Datum</th><th data-sort="text">Uhr</th>
+        <th data-sort="num">VK</th><th data-sort="num">EK</th>
+        <th data-sort="num">DB</th><th data-sort="num">DB %</th>
+        <th data-sort="num">Haltedauer</th>
+      </tr></thead>
+      <tbody>
+        {% for r in d.sales_rows %}
+        <tr>
+          <td data-v="{{ r.ts }}">{{ r.date }}</td>
+          <td>{{ r.title }}</td>
+          <td data-v="{{ r.vk }}">{{ format_money(r.vk) }}</td>
+          <td data-v="{{ r.ek }}">{{ format_money(r.ek) }}</td>
+          <td data-v="{{ r.db }}">{{ format_money(r.db) }}</td>
+          <td data-v="{{ r.pct }}">{{ r.pct }} %</td>
+          <td data-v="{{ r.held }}">{{ r.held }} T</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="hint">Keine Verkäufe im gewählten Zeitraum.</p>{% endif %}
+  </div>
+
+  <div class="wd-card" data-panel="aging">
+    <h2>Bestandsalter (aktive Uhren)</h2>
+    {% for b in d.aging %}
+    <div class="wd-age-row">
+      <span class="wd-age-lbl">{{ b.label }}</span>
+      <div class="wd-age-bar"><div style="width: {{ b.pct }}%"></div></div>
+      <span class="wd-age-n">{{ b.count }}</span>
+    </div>
+    {% endfor %}
+    {% if d.aging and d.aging[0].count + d.aging[1].count + d.aging[2].count + d.aging[3].count == 0 %}
+    <p class="hint">Keine aktiven Uhren.</p>{% endif %}
+  </div>
+
+  <div class="wd-card" data-panel="brands">
+    <h2>Top-Marken (Zeitraum)</h2>
+    {% if d.brands %}
+    <table class="table">
+      <thead><tr><th>Marke</th><th>Verkäufe</th><th>Umsatz</th><th>Ø DB</th></tr></thead>
+      <tbody>
+        {% for b in d.brands[:8] %}
+        <tr><td>{{ b.brand }}</td><td>{{ b.n }}</td>
+          <td>{{ format_money(b.vk) }}</td><td>{{ format_money(b.db_avg) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="hint">Keine Verkäufe im gewählten Zeitraum.</p>{% endif %}
+  </div>
+
+  <div class="wd-card">
   <h2>VK-/Margen-Kalkulator – live, ohne Knopf</h2>
   <div id="wd-seed" data-seed='{{ d.calc_seed | tojson }}' hidden></div>
   <div class="wd-calc">

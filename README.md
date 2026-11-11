@@ -118,8 +118,8 @@ Einverständniserklärung und was vor der Aktivierung zu klären ist:
 
 - Umgebungsvariablen: `.env.example`
 - Grenzen der Katalog-Integration: `docs/WEBCATALOG.md`
-- Spätere Ausbaustufen (Bestandsseite öffentlich, Analytics):
-  `docs/spaete-ausbaustufen.md`
+- Analyse-Dashboard „Endausstattung“ (Funktion5) ist **umgesetzt**; offene
+  Ausbaustufe: öffentliche Bestandsseite – Details: `docs/spaete-ausbaustufen.md`
 
 ## V2-Formularwork (Bestandsverwaltung)
 

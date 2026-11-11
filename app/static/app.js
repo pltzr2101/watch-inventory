@@ -845,3 +845,97 @@ document.addEventListener("change", function (event) {
   var group = svg.querySelector('[data-chart-series="' + toggle.getAttribute("data-chart-toggle") + '"]');
   if (group) group.style.display = toggle.checked ? "" : "none";
 });
+
+// ---------- Auswertung: Ansicht konfigurierbar (KPIs/Panels, localStorage) ----------
+(function () {
+  var chips = document.querySelector(".wd-chips");
+  var grid = document.querySelector(".wd-kpi-grid, .wd-grid");
+  if (!chips || !document.querySelector(".wd-kpi, .wd-card")) return;
+  var KEY = "wi-dash-cfg";
+  var items = [];
+  document.querySelectorAll(".wd-kpi").forEach(function (el, i) {
+    var lbl = el.querySelector(".lbl");
+    items.push({ el: el, key: "kpi:" + (lbl ? lbl.textContent.trim() : i) });
+  });
+  document.querySelectorAll(".wd-card").forEach(function (el, i) {
+    var h = el.querySelector("h2");
+    var name = h ? h.childNodes[0].textContent.trim() : el.getAttribute("data-panel") || i;
+    items.push({ el: el, key: "panel:" + name });
+  });
+  var hidden = new Set();
+  try {
+    JSON.parse(localStorage.getItem(KEY) || "[]").forEach(function (k) { hidden.add(k); });
+  } catch (e) { /* egal – dann Standard */ }
+  function apply() {
+    items.forEach(function (it) {
+      it.el.style.display = hidden.has(it.key) ? "none" : "";
+    });
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(Array.from(hidden))); } catch (e) {}
+  }
+  apply();
+  var wrap = document.createElement("details");
+  wrap.className = "wd-chip wd-cfg";
+  var summary = document.createElement("summary");
+  summary.textContent = "Ansicht anpassen";
+  wrap.appendChild(summary);
+  var box = document.createElement("div");
+  box.className = "wd-cfg-list";
+  items.forEach(function (it) {
+    var lab = document.createElement("label");
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = !hidden.has(it.key);
+    cb.addEventListener("change", function () {
+      if (cb.checked) hidden.delete(it.key); else hidden.add(it.key);
+      save(); apply();
+    });
+    lab.appendChild(cb);
+    lab.appendChild(document.createTextNode(" " + it.key.split(":")[1]));
+    box.appendChild(lab);
+  });
+  var reset = document.createElement("button");
+  reset.type = "button";
+  reset.className = "btn btn-sm";
+  reset.textContent = "Ansicht zurücksetzen";
+  reset.addEventListener("click", function () {
+    hidden.clear(); save(); apply();
+    box.querySelectorAll("input[type=checkbox]").forEach(function (cb) { cb.checked = true; });
+  });
+  box.appendChild(reset);
+  wrap.appendChild(box);
+  chips.insertBefore(wrap, chips.querySelector("span[style*=flex]"));
+})();
+
+// ---------- Auswertung: Verkaufsliste clientseitig sortieren ----------
+document.addEventListener("click", function (event) {
+  var th = event.target.closest(".wd-sortable th[data-sort]");
+  if (!th) return;
+  var table = th.closest("table");
+  var tbody = table.querySelector("tbody");
+  var idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+  var type = th.getAttribute("data-sort");
+  var dir = th.getAttribute("data-dir") === "asc" ? "desc" : "asc";
+  table.querySelectorAll("th[data-sort]").forEach(function (h) { h.removeAttribute("data-dir"); });
+  th.setAttribute("data-dir", dir);
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+  rows.sort(function (a, b) {
+    var ca = a.children[idx], cb = b.children[idx];
+    var va, vb;
+    if (type === "num") {
+      va = Number(ca.getAttribute("data-v") || "0");
+      vb = Number(cb.getAttribute("data-v") || "0");
+    } else if (type === "date") {
+      va = Number(ca.getAttribute("data-v") || "0");
+      vb = Number(cb.getAttribute("data-v") || "0");
+    } else {
+      va = ca.textContent.trim().toLowerCase();
+      vb = cb.textContent.trim().toLowerCase();
+    }
+    if (va < vb) return dir === "asc" ? -1 : 1;
+    if (va > vb) return dir === "asc" ? 1 : -1;
+    return 0;
+  });
+  rows.forEach(function (r) { tbody.appendChild(r); });
+});

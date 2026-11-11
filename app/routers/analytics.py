@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Request
+from fastapi.responses import Response
 
 from ..deps import DbDep
 from ..money import format_money
@@ -82,12 +85,88 @@ def _svg_geometry(data: dict) -> None:
 _CHART_PERIODS: dict[str, int | None] = {"6": 6, "12": 12, "24": 24, "all": None}
 
 
+def _parse_date(value: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 @router.get("/auswertung")
 def auswertung(
-    request: Request, db=DbDep, p: str = analytics.DEFAULT_PERIOD, c: str = "12"
+    request: Request,
+    db=DbDep,
+    p: str = analytics.DEFAULT_PERIOD,
+    c: str = "12",
+    von: str = "",
+    bis: str = "",
 ):
     chart_key = c if c in _CHART_PERIODS else "12"
-    data = analytics.dashboard(db, p, chart=_CHART_PERIODS[chart_key])
+    d_von, d_bis = _parse_date(von), _parse_date(bis)
+    custom_error = ""
+    if (von and d_von is None) or (bis and d_bis is None):
+        custom_error = "Ungültiges Datum – bitte JJJJ-MM-TT verwenden."
+    elif d_von is not None and d_bis is not None and d_von > d_bis:
+        custom_error = "„Von“ liegt nach „Bis“."
+    if d_von is not None and d_bis is not None and not custom_error:
+        data = analytics.dashboard(
+            db, p, chart=_CHART_PERIODS[chart_key], von=d_von, bis=d_bis
+        )
+    else:
+        data = analytics.dashboard(db, p, chart=_CHART_PERIODS[chart_key])
     data["chart_period"] = chart_key
+    data["custom_error"] = custom_error
     _svg_geometry(data)
     return render(request, "auswertung.html", d=data)
+
+
+def _sales_csv(db, p: str, von: str, bis: str) -> Response:  # type: ignore[valid-type]
+    import csv
+    import io
+
+    d_von, d_bis = _parse_date(von), _parse_date(bis)
+    if d_von is not None and d_bis is not None and d_von <= d_bis:
+        data = analytics.dashboard(db, p, von=d_von, bis=d_bis, chart=None)
+    else:
+        data = analytics.dashboard(db, p, chart=None)
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_MINIMAL)
+    writer.writerow(["Datum", "Uhr", "VK (EUR)", "EK (EUR)", "DB (EUR)",
+                     "DB (%)", "Haltedauer (Tage)"])
+
+    def esc(value: object) -> object:
+        # CSV-Injection-Schutz: Excel-Auswertungszeichen am Feldanfang neutralisieren
+        if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
+            return "'" + value
+        return value
+
+    for r in data["sales_rows"]:
+        writer.writerow(
+            [esc(r["date"]), esc(r["title"]), _e(r["vk"]), _e(r["ek"]),
+             _e(r["db"]), r["pct"], r["held"]]
+        )
+    return Response(
+        buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=verkaeufe.csv",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+def _e(cents: int) -> str:
+    return f"{cents / 100:.2f}".replace(".", ",")
+
+
+@router.get("/auswertung/verkaeufe.csv")
+def sales_csv(
+    request: Request,
+    db=DbDep,
+    p: str = analytics.DEFAULT_PERIOD,
+    von: str = "",
+    bis: str = "",
+):
+    return _sales_csv(db, p, von, bis)

@@ -14,7 +14,7 @@ nötig – diese Module dürfen nicht wiederverwendet werden.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -91,19 +91,32 @@ def dashboard(
     period: str,
     now: datetime | None = None,
     chart: int | None = 12,
+    von: date | None = None,
+    bis: date | None = None,
 ) -> dict:
     """Alle Daten für /auswertung als reines Ergebnis-Dict (ints in Cents)."""
     # Naive UTC wie die DB (DateTime-Spalten speichern ohne Timezone)
     now = now or datetime.now(UTC).replace(tzinfo=None)
-    since = _since(period, now)
+    since: datetime | None = None
+    until: datetime | None = None
+    if von is not None and bis is not None and von <= bis:
+        since = datetime(von.year, von.month, von.day)
+        until = datetime(bis.year, bis.month, bis.day) + timedelta(days=1)
+    else:
+        since = _since(period, now)
 
     all_watches = list(db.execute(select(Watch)).scalars().all())
     sold_all = [w for w in all_watches if _sold_when(w) is not None]
     sold = []
     for w in sold_all:
         when = _sold_when(w)
-        if since is None or (when is not None and when >= since):
-            sold.append(w)
+        if when is None:
+            continue
+        if since is not None and when < since:
+            continue
+        if until is not None and when >= until:
+            continue
+        sold.append(w)
     active = [w for w in all_watches if w.status != WatchStatus.SOLD]
 
     labels = dict(
@@ -165,6 +178,8 @@ def dashboard(
             (s for w in sold_all if (s := _sold_when(w)) is not None), default=None
         )
         months = ((now - first).days / 30.44 + 1) if first else 1
+    elif von is not None and bis is not None and von <= bis:
+        months = max(1.0, ((bis - von).days + 1) / 30.44)
     else:
         months = max(1.0, (PERIODS.get(period) or 90) / 30.44)
     per_month = round(len(sold) / months, 1) if months else 0.0
@@ -239,8 +254,82 @@ def dashboard(
         for w, m in top
     ]
 
+    # Deckungsbeitrag = Summe der Marge über die verkauften Uhren im Zeitraum
+    db_total = sum(m for _, m in margins_ok)
+    sales_rows = []
+    for w, m in sorted(
+        margins_ok, key=lambda t: _sold_when(t[0]) or now, reverse=True
+    ):
+        sale = w.sale_price_cents or 0
+        when = _sold_when(w) or now
+        sales_rows.append(
+            {
+                "date": when.strftime("%Y-%m-%d"),
+                "ts": int(when.timestamp()),
+                "title": w.title or "Ohne Titel",
+                "vk": sale,
+                "ek": max(0, sale - m),
+                "db": m,
+                "pct": round(100 * m / sale) if sale else 0,
+                "held": _held_days(w, now),
+            }
+        )
+
+    # Bestandsalter aktiver Uhren (Buckets, ab Anlage)
+    age_buckets: list[tuple[str, int, int]] = [
+        ("0–30 Tage", 0, 30),
+        ("31–90 Tage", 31, 90),
+        ("91–180 Tage", 91, 180),
+        ("ab 181 Tage", 181, 10**6),
+    ]
+    aging: list[dict] = []
+    for label, lo, hi in age_buckets:
+        cnt = 0
+        for w in active:
+            if w.created_at is None:
+                continue
+            age = max(0, (now - w.created_at).days)
+            if lo <= age <= hi:
+                cnt += 1
+        aging.append({"label": label, "count": cnt})
+    aging_max = max((b["count"] for b in aging), default=0) or 1
+    for b in aging:
+        b["pct"] = round(100 * b["count"] / aging_max)
+
+    # Top-Marken der verkauften Uhren im Zeitraum
+    brand_acc: dict[str, dict] = {}
+    for w, m in margins_ok:
+        key = (w.brand or "Ohne Marke").strip() or "Ohne Marke"
+        row = brand_acc.setdefault(key, {"n": 0, "vk": 0, "db": 0})
+        row["n"] += 1
+        row["vk"] += w.sale_price_cents or 0
+        row["db"] += m
+    brand_rows = sorted(brand_acc.items(), key=lambda kv: kv[1]["db"], reverse=True)
+    brands = [
+        {"brand": k, "n": v["n"], "vk": v["vk"], "db": v["db"],
+         "db_avg": round(v["db"] / v["n"])}
+        for k, v in brand_rows
+    ]
+
+    from urllib.parse import urlencode
+
+    if von is not None and bis is not None and von <= bis:
+        csv_query = urlencode({"von": von.isoformat(), "bis": bis.isoformat()})
+        period_key = "custom"
+        custom_vals = {"von": von.isoformat(), "bis": bis.isoformat()}
+    else:
+        csv_query = urlencode({"p": period if period in PERIODS else DEFAULT_PERIOD})
+        period_key = period if period in PERIODS else DEFAULT_PERIOD
+        custom_vals = {"von": "", "bis": ""}
+
     return {
-        "period": period if period in PERIODS else DEFAULT_PERIOD,
+        "period": period_key,
+        "custom": custom_vals,
+        "sales_rows": sales_rows,
+        "db_total": db_total,
+        "aging": aging,
+        "brands": brands,
+        "csv_query": csv_query,
         "kpi": {
             "avg_sale": avg_sale,
             "avg_ek": avg_ek,

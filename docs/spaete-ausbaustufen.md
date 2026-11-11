@@ -55,3 +55,19 @@ externen Dienste nötig.
 - Keine Shop-, Warenkorb-, Checkout- oder Zahlungsfunktionen.
 - Import-Synchronisation bleibt manuell (Vorschau + Bestätigung), nie
   automatisch-destruktiv.
+
+## Umsetzungsstand (2026-11-09)
+
+- [x] **Funktion5 – Analyse-Dashboard „Endausstattung“** umgesetzt:
+  - Custom-Zeitraum `?von=…&bis=…` (Chip „Eigener Zeitraum“, serverseitige
+    Datumsvalidierung mit Klartext-Fehler)
+  - KPI „Deckungsbeitrag (Zeitraum)“ (= Summe `margin_eur`, keine Zweit-Definition)
+  - Verkaufsliste (`.table`, clientseitig sortierbar: Datum, VK, EK, DB, DB %, Haltedauer)
+  - CSV-Export `GET /auswertung/verkaeufe.csv?…` – nur mit Session-Auth,
+    CSV-Injection-Schutz (`=+-@` → Apostroph), keine internen Notizen/Spalten
+  - Bestandsalter-Buckets aktiver Uhren (0–30 / 31–90 / 91–180 / ab181 Tage)
+  - Top-Marken (Verkäufe, Umsatz, Ø DB je Marke)
+  - KPI-/Panel-Auswahl „Ansicht anpassen“ (localStorage, „Ansicht zurücksetzen“)
+- [ ] **Funktion4 – Öffentliche, schreibgeschützte Bestandsseite** (in DE / in CN):
+  nur `public_approved`-Felder; niemals Einkaufspreise, interne Notizen,
+  Quell-Daten oder nicht freigegebene Katalogbilder; eigene read-only-Route.

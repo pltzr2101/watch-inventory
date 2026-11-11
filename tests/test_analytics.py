@@ -219,3 +219,81 @@ def test_chart_serie_laenge_nach_param(auth_client) -> None:
         data_all = analytics.dashboard(db, "all", chart=None)
         assert data_all["chart_all"] is True
         assert data_all["chart_months"] >= 12
+
+
+def test_custom_zeitraum_und_panels(auth_client) -> None:
+    """Eigener Zeitraum von/bis filtert Verkäufe; neue Panels und DB-Summe da."""
+    from app.db import make_session_factory
+    from app.services import analytics
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        data_all = analytics.dashboard(db, "all")
+        n_all = len(data_all["sales_rows"])
+        db_all = data_all["db_total"]
+        # DB-Summe == Summe der margin_eur-Werte (keine Zweit-Definition)
+        assert db_all == sum(r["db"] for r in data_all["sales_rows"])
+        if n_all:
+            # Verkauf außerhalb eines winzigen Fensters ausschließen (1999)
+            from datetime import date as _date
+
+            data_out = analytics.dashboard(
+                db, "all", von=_date(1999, 1, 1), bis=_date(1999, 12, 31)
+            )
+            assert data_out["sales_rows"] == []
+            assert data_out["db_total"] == 0
+            # Enthaltendes Fenster (von vor gestern bis morgen)
+            from datetime import timedelta
+
+            today = datetime.now().date()
+            data_in = analytics.dashboard(
+                db, "all",
+                von=today - timedelta(days=2),
+                bis=today + timedelta(days=1),
+            )
+            assert len(data_in["sales_rows"]) == n_all
+        assert "aging" in data_all and len(data_all["aging"]) == 4
+        assert sum(b["count"] for b in data_all["aging"]) == data_all["kpi"]["stock_count"]
+
+    # Route: Custom-URL + Fehlerfälle + Panels im HTML
+    html = auth_client.get("/auswertung?von=2026-01-01&bis=2026-12-31").text
+    assert 'class="wd-chip wd-chip-custom on"' in html
+    assert "Verkäufe im Zeitraum" in html
+    assert "Bestandsalter (aktive Uhren)" in html
+    assert "Deckungsbeitrag (Zeitraum)" in html
+    html_err = auth_client.get("/auswertung?von=Quatsch&bis=2026-12-31").text
+    assert "Ungültiges Datum" in html_err
+    html_inv = auth_client.get("/auswertung?von=2026-12-31&bis=2026-01-01").text
+    assert "liegt nach" in html_inv
+
+
+def test_csv_export_verkaeufe(auth_client) -> None:
+    """CSV-Export: auth-geschützt, Kopf + Zeilen, Escaping, keine Notizen."""
+    r = auth_client.get("/auswertung/verkaeufe.csv")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["content-type"]
+    assert "verkaeufe.csv" in r.headers["content-disposition"]
+    lines = r.text.strip().splitlines()
+    assert lines[0] == "Datum;Uhr;VK (EUR);EK (EUR);DB (EUR);DB (%);Haltedauer (Tage)"
+    # Keine internen Notizen/Spalten im Export
+    assert "interne" not in r.text.lower()
+    assert "purchase_batch" not in r.text
+    # Ohne Session → Redirect (nicht öffentlich)
+    fresh = TestClient(auth_client.app)
+    r2 = fresh.get("/auswertung/verkaeufe.csv", follow_redirects=False)
+    #401 (API-Auth) oder Redirect – alles außer200 ist sicher
+    assert r2.status_code in (302, 303, 307, 401) and r2.status_code != 200
+    # CSV-Injection: Titel mit "="-Anfang wird neutralisiert
+    from app.db import make_session_factory
+    from app.models import Watch, WatchStatus, utcnow
+
+    Session = make_session_factory(auth_client.app.state.engine)
+    with Session() as db:
+        w = Watch(sku="CSV-EVIL", title="=cmd|calc", brand="Evil",
+                  status=WatchStatus.SOLD, purchase_price_cents=10000,
+                  sale_price_cents=15000)
+        w.sold_at = utcnow()
+        db.add(w)
+        db.commit()
+    r3 = auth_client.get("/auswertung/verkaeufe.csv")
+    assert "'=cmd|calc" in r3.text

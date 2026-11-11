@@ -691,3 +691,33 @@ table.wd-tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tab
 .wd-legend label { display: inline-flex; gap: 0.3rem; align-items: center;
   cursor: pointer; margin-right: 0.9rem; }
 .wd-legend input { width: auto; accent-color: #e8b84b; }
+
+/* Auswertung: Eigener Zeitraum, Ansichtskonfiguration, Bestandsalter */
+.wd-chip-custom { position: relative; }
+.wd-chip-custom summary { cursor: pointer; list-style: none; }
+.wd-chip-custom summary::-webkit-details-marker { display: none; }
+.wd-custom-form { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  display: flex; gap: 0.5rem; align-items: end; padding: 0.7rem;
+  background: #161a22; border: 1px solid #2a3040; border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45); }
+.wd-custom-form label { display: flex; flex-direction: column; gap: 0.2rem;
+  font-size: 11px; color: #8d93a1; }
+.wd-custom-form input[type=date] { min-width: 9.5rem; }
+.wd-cfg { position: relative; }
+.wd-cfg summary { cursor: pointer; list-style: none; }
+.wd-cfg summary::-webkit-details-marker { display: none; }
+.wd-cfg-list { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  display: flex; flex-direction: column; gap: 0.35rem; min-width: 15rem;
+  padding: 0.75rem; background: #161a22; border: 1px solid #2a3040;
+  border-radius: 8px; box-shadow: 0 8px 22px rgba(0,0,0,.45); font-size: 12px; }
+.wd-cfg-list label { display: flex; gap: 0.4rem; align-items: center; cursor: pointer; }
+.wd-age-row { display: grid; grid-template-columns: 8rem 1fr 2.4rem;
+  gap: 0.6rem; align-items: center; padding: 0.3rem 0; font-size: 13px; }
+.wd-age-bar { background: #222632; border-radius: 4px; height: 14px; overflow: hidden; }
+.wd-age-bar > div { height: 100%; background: #e8b84b; opacity: .85; border-radius: 4px; }
+.wd-age-n { text-align: right; color: #cfd3dc; }
+.wd-sortable th[data-sort] { cursor: pointer; user-select: none; }
+.wd-sortable th[data-sort]::after { content: " ⇅"; color: #565d6e; font-size: 10px; }
+.wd-sortable th[data-dir="asc"]::after { content: " ↑"; color: #e8b84b; }
+.wd-sortable th[data-dir="desc"]::after { content: " ↓"; color: #e8b84b; }
+.field-error { color: #ff8a8a; font-size: 12px; }
